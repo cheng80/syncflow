@@ -107,5 +107,9 @@
   "sendCodeFailed": "验证码发送失败。",
   "emailAndCodeRequired": "请输入邮箱和验证码。",
   "codeMustBe6Digits": "验证码必须为6位数字。",
-  "verifyFailed": "验证失败。"
+  "verifyFailed": "验证失败。",
+  "moveCard": "移至其他列",
+  "moveMode": "移动模式",
+  "moveComplete": "移动",
+  "moveCardToColumn": "选择目标列"
 }

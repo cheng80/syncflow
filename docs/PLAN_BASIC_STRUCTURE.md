@@ -66,6 +66,7 @@
 - [x] 3.3 Flutter: 카드 위젯, 카드 상세 모달 (lib/view/, lib/widget/)
 - [x] 3.4 Flutter: BoardDetailHandler, CardHandler (DB/API 접근) (lib/vm/)
 - [x] 3.5 Flutter: 카드 드래그 재정렬 (같은 컬럼 내) (lib/view/)
+- [x] 3.6 Flutter: 컬럼 간 카드 이동 (이동 아이콘 → MoveCardSheet) (lib/widget/move_card_sheet.dart)
 
 **참조**: UI/UX 설계서, ERD cards
 

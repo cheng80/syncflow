@@ -107,5 +107,9 @@
   "sendCodeFailed": "Failed to send verification code.",
   "emailAndCodeRequired": "Please enter email and verification code.",
   "codeMustBe6Digits": "Verification code must be 6 digits.",
-  "verifyFailed": "Verification failed."
+  "verifyFailed": "Verification failed.",
+  "moveCard": "Move to another column",
+  "moveMode": "Move mode",
+  "moveComplete": "Move",
+  "moveCardToColumn": "Select destination column"
 }

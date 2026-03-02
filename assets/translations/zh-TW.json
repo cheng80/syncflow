@@ -107,5 +107,9 @@
   "sendCodeFailed": "驗證碼發送失敗。",
   "emailAndCodeRequired": "請輸入信箱與驗證碼。",
   "codeMustBe6Digits": "驗證碼必須為6位數字。",
-  "verifyFailed": "驗證失敗。"
+  "verifyFailed": "驗證失敗。",
+  "moveCard": "移至其他欄位",
+  "moveMode": "移動模式",
+  "moveComplete": "移動",
+  "moveCardToColumn": "選擇目標欄位"
 }

@@ -107,5 +107,9 @@
   "sendCodeFailed": "認証コードの送信に失敗しました。",
   "emailAndCodeRequired": "メールアドレスと認証コードを入力してください。",
   "codeMustBe6Digits": "認証コードは6桁の数字です。",
-  "verifyFailed": "認証に失敗しました。"
+  "verifyFailed": "認証に失敗しました。",
+  "moveCard": "別のカラムへ移動",
+  "moveMode": "移動モード",
+  "moveComplete": "移動",
+  "moveCardToColumn": "移動先のカラムを選択"
 }

@@ -1,7 +1,9 @@
 // card_tile.dart
 // 카드 타일 위젯 (리스트용)
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'package:syncflow/model/board.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
@@ -15,11 +17,14 @@ class CardTile extends StatelessWidget {
     required this.card,
     required this.onTap,
     required this.onRefresh,
+    this.onMove,
   });
 
   final CardItem card;
   final VoidCallback onTap;
   final VoidCallback onRefresh;
+  /// 컬럼 간 이동 모드 진입 (null이면 이동 아이콘 미표시)
+  final VoidCallback? onMove;
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +68,27 @@ class CardTile extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                     ),
+                  if (onMove != null) ...[
+                    const SizedBox(width: 4),
+                    Material(
+                      color: p.divider.withValues(alpha: 0.3),
+                      shape: const CircleBorder(),
+                      child: InkWell(
+                        onTap: () {
+                          HapticFeedback.selectionClick();
+                          onMove!();
+                        },
+                        customBorder: const CircleBorder(),
+                        child: Tooltip(
+                          message: context.tr('moveCard'),
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: Icon(Icons.swap_horiz, size: 18, color: p.textSecondary),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               if (card.description.isNotEmpty) ...[

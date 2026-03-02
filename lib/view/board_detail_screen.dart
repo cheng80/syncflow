@@ -22,6 +22,7 @@ import 'package:syncflow/vm/board_handler.dart';
 import 'package:syncflow/widget/card_detail_modal.dart';
 import 'package:syncflow/widget/markdown_help_dialog.dart';
 import 'package:syncflow/widget/card_tile.dart';
+import 'package:syncflow/widget/move_card_sheet.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
 
 /// 보드 상세 화면
@@ -213,6 +214,7 @@ class _BoardColumnsViewState extends State<_BoardColumnsView> {
                 key: ValueKey('col_${col.id}_$cardsKey'),
                 column: col,
                 cards: cards,
+                columns: columns,
                 boardId: widget.boardId,
                 onRefresh: widget.onRefresh,
               );
@@ -1366,12 +1368,14 @@ class _ColumnView extends ConsumerStatefulWidget {
     super.key,
     required this.column,
     required this.cards,
+    required this.columns,
     required this.boardId,
     required this.onRefresh,
   });
 
   final ColumnItem column;
   final List<CardItem> cards;
+  final List<ColumnItem> columns;
   final int boardId;
   final VoidCallback onRefresh;
 
@@ -1490,6 +1494,16 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
                   card: card,
                   onTap: () => _showCardDetail(card),
                   onRefresh: widget.onRefresh,
+                  onMove: widget.columns.length > 1
+                      ? () => showMoveCardSheet(
+                            context,
+                            boardId: widget.boardId,
+                            card: card,
+                            fromColumnId: widget.column.id,
+                            columns: widget.columns,
+                            onRefresh: widget.onRefresh,
+                          )
+                      : null,
                 ),
               );
             },
