@@ -5,5 +5,5 @@
 
 storePassword=키스토어_비밀번호
 keyPassword=별칭_비밀번호
-keyAlias=habitcell_key
-storeFile=/Users/cheng80/android_keystore/habitcell_keystore.jks
+keyAlias=syncflow_key
+storeFile=/Users/cheng80/android_keystore/syncflow_keystore.jks

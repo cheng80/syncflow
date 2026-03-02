@@ -1,22 +1,22 @@
 # 앱 스토어 출시 체크리스트
 
-> Flutter 앱 출시 시 재사용 가능한 체크리스트. 앱별로 Bundle ID, applicationId 등은 수정하여 사용.
+> SyncFlow 앱 출시 시 체크리스트. 앱별로 Bundle ID, applicationId 등은 수정하여 사용.
 
 ---
 
-## HabitCell 전용
+## SyncFlow 전용
 
 | 항목 | 값 |
 |------|-----|
-| Bundle ID (iOS) | `com.cheng80.habitcell` |
-| applicationId (Android) | `com.cheng80.habitcell` |
+| Bundle ID (iOS) | `com.cheng80.syncflow` |
+| applicationId (Android) | `com.cheng80.syncflow` |
 | 카테고리 | 생산성 (Productivity) |
 
 ---
 
 ## 앱 스토어 (iOS)
 
-- 현재 출시 버전: `1.0.0+2` (App Store 배포 완료)
+- 현재 출시 버전: `1.0.0+1` (초기 출시 준비 중)
 
 - [ ] **Apple Developer Program 가입**
   - [developer.apple.com](https://developer.apple.com) 연간 $99
@@ -26,7 +26,7 @@
   - 앱 이름, 부제목, 설명 작성
   - 카테고리 선택
 
-- [x] **스크린샷 준비** (iOS 완료)
+- [ ] **스크린샷 준비**
   - iPhone 6.7", 6.5", 5.5" (필수)
   - iPad (선택)
 
@@ -47,7 +47,7 @@
     - `flutter build ios --release --build-name 1.0.1 --build-number 2`
   - 참고: iOS에서 `build-name` = `CFBundleShortVersionString`, `build-number` = `CFBundleVersion`
 
-- [x] **App Store 제출** (출시 완료)
+- [ ] **App Store 제출**
   - 가격 책정 (무료/유료)
   - 심사 제출 및 승인 (Released)
 
@@ -73,7 +73,7 @@
 
 - [ ] **서명 설정**
   - release keystore 생성·보관
-  - `key.properties`, `build.gradle` 서명 설정
+  - `key.properties`, `build.gradle.kts` 서명 설정
 
 - [ ] **내부/알파/베타 테스트**
   - Internal testing track 등록
@@ -106,12 +106,12 @@
 - [x] **스토어 평점/리뷰 팝업** (구현 완료)
   - 패키지: `in_app_review: ^2.0.11`
   - `InAppReviewService`: `requestReview()` 자동 호출 (5개 완료 또는 3일 경과)
-  - Drawer "평점 남기기" → `openStoreListing()` (iOS `appStoreId` 설정 완료)
-  - 설정값: `lib/service/in_app_review_service.dart` → `appStoreId = 6759329455`
+  - Drawer "평점 남기기" → `openStoreListing()` (iOS `appStoreId` 설정 필요)
+  - 설정값: `lib/service/in_app_review_service.dart` → `appStoreId` 출시 시 App Store Connect > Apple ID 입력
 
 - [ ] **스크린샷·문서**
-  - `docs/screensshots/` 대표 이미지 (README 연동)
-  - `docs/erd/`, `docs/system/` 다이어그램
+  - `docs/screenshots/` 대표 이미지 (README 연동)
+  - `docs/syncflow/` ERD, 설계 문서
 
 - [ ] **릴리즈 빌드 점검**
   - `flutter build ios --release` / `flutter build appbundle --release`
@@ -121,6 +121,6 @@
 
 ## 참고 문서
 
-- `docs/DRAWER_AND_VERSION_GUIDE.md` — Drawer 구조, package_info_plus, 버전 업데이트 (다른 앱 적용 가이드)
+- `docs/DRAWER_AND_VERSION_GUIDE.md` — Drawer 구조, package_info_plus, 버전 업데이트
 - `README.md` — 버전 관리 요약
 - `docs/IN_APP_REVIEW_GUIDE.md` — 인앱 리뷰 테스트·가이드라인

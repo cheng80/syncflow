@@ -1,4 +1,4 @@
-# HabitCell 릴리즈 빌드 가이드
+# SyncFlow 릴리즈 빌드 가이드
 
 > Play Store / App Store 업로드용 릴리즈 빌드 절차
 
@@ -36,14 +36,16 @@ cp android/key.properties.example android/key.properties
 ```properties
 storePassword=키스토어_비밀번호
 keyPassword=별칭_비밀번호
-keyAlias=habitcell_key
-storeFile=/Users/cheng80/android_keystore/habitcell_keystore.jks
+keyAlias=syncflow_key
+storeFile=/Users/cheng80/android_keystore/syncflow_keystore.jks
 ```
 
 | 항목 | 값 |
 |------|-----|
-| keystore 경로 | `/Users/cheng80/android_keystore/habitcell_keystore.jks` |
-| key alias | `habitcell_key` |
+| keystore 경로 | `/Users/cheng80/android_keystore/syncflow_keystore.jks` |
+| key alias | `syncflow_key` |
+
+> keystore가 없다면 `keytool -genkey -v -keystore syncflow_keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias syncflow_key` 로 생성
 
 ### 2. App Bundle 빌드 (권장)
 

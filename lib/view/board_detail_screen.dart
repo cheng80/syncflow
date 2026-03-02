@@ -940,6 +940,7 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     });
   }
 
+  // ignore: unused_element - isDone 스위치 임시 숨김 시 사용
   Future<void> _toggleDone(ColumnItem column, bool nextDone) async {
     await _runColumnTask((token) async {
       await ref.read(boardHandlerProvider).updateColumn(
@@ -1092,10 +1093,11 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
                             icon: const Icon(Icons.edit_outlined, size: 18),
                             tooltip: context.tr('rename'),
                           ),
-                          Switch(
-                            value: col.isDone,
-                            onChanged: _loading ? null : (v) => _toggleDone(col, v),
-                          ),
+                          // TODO: 임시로 isDone 스위치 숨김
+                          // Switch(
+                          //   value: col.isDone,
+                          //   onChanged: _loading ? null : (v) => _toggleDone(col, v),
+                          // ),
                           IconButton(
                             onPressed: _loading ? null : () => _deleteColumn(col),
                             icon: const Icon(Icons.delete_outline, size: 18),

@@ -28,6 +28,7 @@
 | 실시간 동기화 | WebSocket 기반 카드 이동/수정 즉시 반영 |
 | Soft Lock | 카드 편집 중 동시 편집 방지 (TTL 30초) |
 | Presence | 보드 접속 사용자 아바타 표시 |
+| 멤버 초대 | 6자리 초대 코드로 보드 참가 |
 
 ---
 
@@ -36,10 +37,10 @@
 | 구분 | 기술 | 용도 |
 |------|------|------|
 | 프론트엔드 | Flutter | iOS/Android/Web |
-| 상태 관리 | Riverpod 3.0+ | Provider/Notifier 직접 구현 (코드 제너레이터 미사용) |
+| 상태 관리 | Riverpod 3.0+ | Provider/Notifier 직접 구현 |
 | 백엔드 | FastAPI | REST API, WebSocket |
 | DB | MySQL | users, sessions, boards, columns, cards |
-| 설정 | GetStorage, FlutterSecureStorage | 테마 등(GetStorage), 세션 토큰(Secure Storage) |
+| 설정 | GetStorage, FlutterSecureStorage | 테마 등, 세션 토큰 |
 | UI | Neo-Brutalism | 강한 대비, 두꺼운 보더, 오프셋 쉐도우 |
 
 ---
@@ -52,46 +53,34 @@
 lib/
 ├── main.dart
 ├── model/       # Board, Card, Column, User
-├── view/        # 화면 (auth, board_list, board_detail)
-├── vm/          # Handler(DB/API), Notifier(Riverpod)
-├── service/     # api_client, ws_service
-├── widget/      # card_tile, column_header, presence_avatars
+├── view/        # auth, board_list, board_detail, main_scaffold, app_drawer
+├── vm/          # Handler(API), Notifier(Riverpod)
+├── service/     # api_client, ws_service, in_app_review_service
+├── widget/      # card_tile, card_detail_modal, column_header, presence_avatars
 ├── theme/
-└── util/
+├── util/
+├── navigation/
+└── json/
 ```
 
 ```
 fastapi/app/
 ├── main.py
 ├── api/         # auth, boards, cards
-├── ws/          # WebSocket (connection, room, presence, lock)
+├── ws/          # connection, handlers, room, lock
 ├── database/
 └── utils/
 ```
 
-- **Handler**: DB/API 접근 전담
+- **Handler**: API 접근 전담
 - **Notifier**: Riverpod 상태 관리
 - **View**: UI만, `ref.watch`/`ref.read`로 상태 구독·액션 호출
 
 ---
 
-## 구현 단계 (Phase)
-
-| Phase | 내용 |
-|-------|------|
-| **0** | 기존 코드 제거, 프로젝트 초기 설정 |
-| **1** | 계정 및 인증 |
-| **2** | 보드 목록 및 생성 |
-| **3** | 보드 상세 및 카드 CRUD |
-| **4** | WebSocket 실시간 동기화 |
-| **5** | Soft Lock 및 Owner Lock |
-| **6** | 2차 확장 (멤버 초대, 컬럼 편집 등) |
-
-상세: [docs/PLAN_BASIC_STRUCTURE.md](docs/PLAN_BASIC_STRUCTURE.md)
-
----
-
 ## 실행
+
+### 1. Flutter 앱
 
 ```bash
 flutter pub get
@@ -99,6 +88,45 @@ flutter run
 ```
 
 **우선 기기**: iOS 시뮬레이터 (Debug 모드)
+
+### 2. FastAPI 백엔드 (필수)
+
+```bash
+cd fastapi
+python -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+# .env 설정 후
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+상세: [fastapi/API_GUIDE.md](fastapi/API_GUIDE.md)
+
+### 3. API Base URL
+
+앱은 기본적으로 `http://127.0.0.1:8000` (iOS) 또는 `http://10.0.2.2:8000` (Android 에뮬레이터)에 연결합니다.
+
+원격 서버 사용 시 `lib/util/common_util.dart`의 `customApiBaseUrl`을 설정하세요.
+
+```dart
+const String? customApiBaseUrl = 'http://your-server.com:8000';
+```
+
+---
+
+## 구현 단계 (Phase)
+
+| Phase | 내용 | 상태 |
+|-------|------|------|
+| **0** | 기존 코드 제거, 프로젝트 초기 설정 | 완료 |
+| **1** | 계정 및 인증 | 완료 |
+| **2** | 보드 목록 및 생성 | 완료 |
+| **3** | 보드 상세 및 카드 CRUD | 완료 |
+| **4** | WebSocket 실시간 동기화 | 완료 |
+| **5** | Soft Lock 및 Owner Lock | 완료 |
+| **6** | 멤버 초대, 컬럼 편집 등 | 완료 |
+
+상세: [docs/PLAN_BASIC_STRUCTURE.md](docs/PLAN_BASIC_STRUCTURE.md)
 
 ---
 
@@ -121,3 +149,16 @@ location /ws {
 ```
 
 - **임시**: WebSocket 실패 시 앱은 REST만으로 동작 (실시간 동기화 미지원)
+
+---
+
+## 문서
+
+| 문서 | 설명 |
+|------|------|
+| [docs/PLAN_BASIC_STRUCTURE.md](docs/PLAN_BASIC_STRUCTURE.md) | 구현 계획 |
+| [fastapi/API_GUIDE.md](fastapi/API_GUIDE.md) | FastAPI 엔드포인트, 설정 |
+| [docs/RELEASE_BUILD.md](docs/RELEASE_BUILD.md) | 릴리즈 빌드 절차 |
+| [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 앱 스토어 출시 체크리스트 |
+| [docs/DRAWER_AND_VERSION_GUIDE.md](docs/DRAWER_AND_VERSION_GUIDE.md) | Drawer, 버전 표시 |
+| [docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md](docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md) | 튜토리얼 화면 |
