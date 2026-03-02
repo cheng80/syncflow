@@ -1,6 +1,7 @@
 // home.dart
 // 홈 화면 (최소 구성)
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
@@ -27,7 +28,7 @@ class Home extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '실시간 경량 협업 칸반 보드',
+            context.tr('appTagline'),
             style: TextStyle(
               fontSize: 14,
               color: p.textSecondary,

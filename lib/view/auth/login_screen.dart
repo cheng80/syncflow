@@ -1,6 +1,7 @@
 // login_screen.dart
 // 이메일 입력 → 코드 발송 → 코드 입력 → 로그인
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,7 +39,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
       setState(() {
-        _error = '이메일을 입력하세요.';
+        _error = context.tr('emailRequired');
       });
       return;
     }
@@ -62,7 +63,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (_) {
       setState(() {
         _loading = false;
-        _error = '인증 코드 발송에 실패했습니다.';
+        _error = context.tr('sendCodeFailed');
       });
     }
   }
@@ -72,13 +73,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final code = _codeController.text.trim();
     if (email.isEmpty || code.isEmpty) {
       setState(() {
-        _error = '이메일과 인증 코드를 입력하세요.';
+        _error = context.tr('emailAndCodeRequired');
       });
       return;
     }
     if (code.length != 6) {
       setState(() {
-        _error = '인증 코드는 6자리 숫자입니다.';
+        _error = context.tr('codeMustBe6Digits');
       });
       return;
     }
@@ -102,7 +103,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     } catch (_) {
       setState(() {
         _loading = false;
-        _error = '인증에 실패했습니다.';
+        _error = context.tr('verifyFailed');
       });
     }
   }
@@ -124,7 +125,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       backgroundColor: p.background,
       body: SafeArea(
         child: KeyboardDismissScrollView(
-          keyboardPadding: false,
           padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
           child: Center(
             child: ConstrainedBox(
@@ -134,7 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'SyncFlow',
+                    context.tr('appName'),
                     style: TextStyle(
                       color: p.textPrimary,
                       fontSize: ConfigUI.fontSizeTitle,
@@ -144,7 +144,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '소규모 팀을 위한 협업 칸반',
+                    context.tr('appTagline'),
                     style: TextStyle(
                       color: p.textSecondary,
                       fontSize: ConfigUI.fontSizeBody,
@@ -154,7 +154,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 40),
                   if (isCodeStep) ...[
                     Text(
-                      '$_email 로 발송된 6자리 코드를 입력하세요.',
+                      context.tr('codeSentHint', namedArgs: {'email': _email!}),
                       style: TextStyle(
                         color: p.textSecondary,
                         fontSize: ConfigUI.fontSizeLabel,
@@ -167,7 +167,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       maxLength: 6,
                       autofocus: true,
                       decoration: InputDecoration(
-                        hintText: '000000',
+                        hintText: context.tr('verificationCodePlaceholder'),
                         counterText: '',
                         filled: true,
                         fillColor: p.cardBackground,
@@ -181,7 +181,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         TextButton(
                           onPressed: _loading ? null : _goBack,
-                          child: Text('이메일 변경', style: TextStyle(color: p.textSecondary)),
+                          child: Text(context.tr('emailChange'), style: TextStyle(color: p.textSecondary)),
                         ),
                         const Spacer(),
                         FilledButton(
@@ -192,7 +192,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                   height: 20,
                                   child: CircularProgressIndicator(strokeWidth: 2),
                                 )
-                              : const Text('로그인'),
+                              : Text(context.tr('login')),
                         ),
                       ],
                     ),
@@ -202,7 +202,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       autocorrect: false,
                       decoration: InputDecoration(
-                        hintText: '이메일 주소',
+                        hintText: context.tr('emailPlaceholder'),
                         filled: true,
                         fillColor: p.cardBackground,
                         border: OutlineInputBorder(
@@ -219,7 +219,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               height: 20,
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
-                          : const Text('인증 코드 받기'),
+                          : Text(context.tr('getCode')),
                     ),
                   ],
                   if (_error != null) ...[

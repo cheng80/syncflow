@@ -225,6 +225,54 @@ class WsService {
     });
   }
 
+  /// LOCK_ACQUIRE - 카드 편집 락 획득
+  Future<void> acquireLock({
+    required int boardId,
+    required int cardId,
+    String? reqId,
+  }) async {
+    await send({
+      'type': 'LOCK_ACQUIRE',
+      if (reqId != null) 'req_id': reqId,
+      'data': {
+        'board_id': boardId,
+        'card_id': cardId,
+      },
+    });
+  }
+
+  /// LOCK_RENEW - 카드 편집 락 갱신
+  Future<void> renewLock({
+    required int boardId,
+    required int cardId,
+    String? reqId,
+  }) async {
+    await send({
+      'type': 'LOCK_RENEW',
+      if (reqId != null) 'req_id': reqId,
+      'data': {
+        'board_id': boardId,
+        'card_id': cardId,
+      },
+    });
+  }
+
+  /// LOCK_RELEASE - 카드 편집 락 해제
+  Future<void> releaseLock({
+    required int boardId,
+    required int cardId,
+    String? reqId,
+  }) async {
+    await send({
+      'type': 'LOCK_RELEASE',
+      if (reqId != null) 'req_id': reqId,
+      'data': {
+        'board_id': boardId,
+        'card_id': cardId,
+      },
+    });
+  }
+
   /// 연결 종료
   Future<void> disconnect() async {
     _closed = true;

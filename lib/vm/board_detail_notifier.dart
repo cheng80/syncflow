@@ -15,6 +15,32 @@ class OptimisticCardMove {
   final int position;
 }
 
+/// 보드 접속자(Presence) 정보
+class PresenceMember {
+  const PresenceMember({
+    required this.userId,
+    required this.display,
+    this.email,
+  });
+  final int userId;
+  final String display;
+  final String? email;
+}
+
+/// 카드 Soft Lock 상태
+class CardLockState {
+  const CardLockState({
+    required this.cardId,
+    required this.lockedByUserId,
+    required this.lockedByDisplay,
+    required this.expiresAt,
+  });
+  final int cardId;
+  final int lockedByUserId;
+  final String lockedByDisplay;
+  final int expiresAt;
+}
+
 /// 보드별 낙관적 카드 이동 상태 (드래그 시 즉시 반영, 서버 동기화 후 제거)
 final optimisticCardMovesProvider =
     StateProvider.family<Map<int, OptimisticCardMove>, int>((ref, boardId) => {});
@@ -34,6 +60,14 @@ final boardDetailCacheProvider =
 /// 마지막으로 적용한 보드 버전(ms epoch)
 final boardVersionProvider =
     StateProvider.family<int?, int>((ref, boardId) => null);
+
+/// 보드별 접속자 목록 (WebSocket presence 이벤트 반영)
+final presenceMembersProvider =
+    StateProvider.family<List<PresenceMember>, int>((ref, boardId) => const []);
+
+/// 보드별 카드 락 상태 (cardId -> lock)
+final cardLocksProvider =
+    StateProvider.family<Map<int, CardLockState>, int>((ref, boardId) => const {});
 
 /// 서버 데이터 + 낙관적 이동을 합친 카드 목록
 List<CardItem> mergeCardsWithOptimistic(

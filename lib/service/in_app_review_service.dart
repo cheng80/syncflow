@@ -37,16 +37,15 @@ class InAppReviewService {
   }
 
   /// 스토어 리뷰 화면으로 이동 (Drawer 버튼용, 횟수 제한 없음)
-  /// iOS: appStoreId 필수 (App Store Connect > General > App Information > Apple ID)
-  /// 값이 비어 있으면 false 반환 (호출 측에서 스낵바 등 처리)
-  static const String appStoreId = '6759329455';
+  /// - Android: appStoreId 불필요 (패키지명으로 자동)
+  /// - iOS: appStoreId 필수 (App Store Connect > General > App Information > Apple ID)
+  /// TODO: 출시 시 SyncFlow 앱 ID 추가 예정
+  static const String appStoreId = '';
 
-  /// 스토어 화면 열기. 성공 시 true, 실패 시 false (예: appStoreId 미설정)
+  /// 스토어 화면 열기. 성공 시 true, 실패 시 false (예: iOS에서 appStoreId 미설정)
   Future<bool> openStoreListing() async {
-    if (appStoreId.isEmpty) {
-      if (defaultTargetPlatform == TargetPlatform.iOS) {
-        return false;
-      }
+    if (appStoreId.isEmpty && defaultTargetPlatform == TargetPlatform.iOS) {
+      return false;
     }
     try {
       await _review.openStoreListing(appStoreId: appStoreId);

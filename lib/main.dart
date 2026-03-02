@@ -9,6 +9,7 @@ import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:syncflow/util/app_locale.dart';
+import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/view/auth/login_screen.dart';
 import 'package:syncflow/view/main_scaffold.dart';
 import 'package:syncflow/vm/session_notifier.dart';
@@ -49,6 +50,11 @@ Future<void> _main() async {
   await _initDateFormats();
 
   await GetStorage.init();
+
+  // 첫 실행일 저장 (인앱 리뷰 조건용)
+  if (AppStorage.getFirstLaunchDate() == null) {
+    await AppStorage.saveFirstLaunchDate(DateTime.now());
+  }
 
   FlutterNativeSplash.remove();
 

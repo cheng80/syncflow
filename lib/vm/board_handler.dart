@@ -23,6 +23,34 @@ class BoardHandler {
   Future<BoardDetail> getBoardDetail(String sessionToken, int boardId) =>
       _client.getBoardDetail(sessionToken, boardId);
 
+  Future<ColumnItem> createColumn(
+    String sessionToken,
+    int boardId, {
+    required String title,
+    bool isDone = false,
+  }) =>
+      _client.createColumn(sessionToken, boardId, title: title, isDone: isDone);
+
+  Future<ColumnItem> updateColumn(
+    String sessionToken,
+    int boardId,
+    int columnId, {
+    String? title,
+    bool? isDone,
+    int? position,
+  }) =>
+      _client.updateColumn(
+        sessionToken,
+        boardId,
+        columnId,
+        title: title,
+        isDone: isDone,
+        position: position,
+      );
+
+  Future<void> deleteColumn(String sessionToken, int boardId, int columnId) =>
+      _client.deleteColumn(sessionToken, boardId, columnId);
+
   Future<InviteResponse> createInvite(String sessionToken, int boardId) =>
       _client.createInvite(sessionToken, boardId);
 

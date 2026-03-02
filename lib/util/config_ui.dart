@@ -90,4 +90,8 @@ class ConfigUI {
   static const double fontSizeMeta = 12.0;
   static const double fontSizeCaption = 11.0;
 
+  // ─── 카드 입력 제한 ───────────────────────────────────────────────────
+  static const int cardTitleMaxLength = 80;
+  static const int cardDescriptionMaxLength = 4000;
+  static const int cardDescriptionMaxLines = 100;
 }

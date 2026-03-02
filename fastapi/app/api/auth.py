@@ -172,3 +172,21 @@ async def logout(req: LogoutRequest):
         return {"ok": True}
     finally:
         conn.close()
+
+
+@router.delete("/me")
+async def delete_me(user_id: int = Depends(get_current_user_id)):
+    """
+    회원 탈퇴 (사용자 및 연관 데이터 삭제)
+    - users 삭제 시 FK CASCADE로 boards/board_members/sessions/cards 등 정리
+    """
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+            if cursor.rowcount == 0:
+                raise HTTPException(status_code=404, detail="사용자를 찾을 수 없습니다.")
+        return {"ok": True}
+    finally:
+        conn.close()

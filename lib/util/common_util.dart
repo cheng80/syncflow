@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:syncflow/navigation/custom_navigation_util.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
@@ -205,8 +206,8 @@ Future<bool> showConfirmDialog(
   BuildContext context, {
   required String title,
   required String message,
-  String cancelLabel = '취소',
-  String confirmLabel = '확인',
+  String? cancelLabel,
+  String? confirmLabel,
   Color confirmColor = Colors.red,
   bool useRootNavigator = true,
 }) async {
@@ -221,11 +222,11 @@ Future<bool> showConfirmDialog(
       actions: [
         TextButton(
           onPressed: () => CustomNavigationUtil.back(context, result: false),
-          child: Text(cancelLabel, style: TextStyle(color: p.iconOnSheet)),
+          child: Text(cancelLabel ?? context.tr('cancel'), style: TextStyle(color: p.iconOnSheet)),
         ),
         TextButton(
           onPressed: () => CustomNavigationUtil.back(context, result: true),
-          child: Text(confirmLabel, style: TextStyle(color: confirmColor)),
+          child: Text(confirmLabel ?? context.tr('confirm'), style: TextStyle(color: confirmColor)),
         ),
       ],
     ),

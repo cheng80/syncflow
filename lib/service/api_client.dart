@@ -148,6 +148,71 @@ class ApiClient {
     );
   }
 
+  /// POST /v1/boards/{id}/columns - 컬럼 추가 (owner)
+  Future<ColumnItem> createColumn(
+    String sessionToken,
+    int boardId, {
+    required String title,
+    bool isDone = false,
+  }) async {
+    final res = await http.post(
+      Uri.parse(_url('/v1/boards/$boardId/columns')),
+      headers: _authHeaders(sessionToken),
+      body: CustomJsonUtil.encode({
+        'title': title,
+        'is_done': isDone,
+      }) ?? '',
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '컬럼 추가 실패');
+    }
+    return ColumnItem.fromJson(
+      CustomJsonUtil.decode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// PATCH /v1/boards/{boardId}/columns/{columnId} - 컬럼 수정/재정렬 (owner)
+  Future<ColumnItem> updateColumn(
+    String sessionToken,
+    int boardId,
+    int columnId, {
+    String? title,
+    bool? isDone,
+    int? position,
+  }) async {
+    final body = <String, dynamic>{};
+    if (title != null) body['title'] = title;
+    if (isDone != null) body['is_done'] = isDone;
+    if (position != null) body['position'] = position;
+    if (body.isEmpty) throw ApiException('수정할 항목이 없습니다.');
+
+    final res = await http.patch(
+      Uri.parse(_url('/v1/boards/$boardId/columns/$columnId')),
+      headers: _authHeaders(sessionToken),
+      body: CustomJsonUtil.encode(body) ?? '',
+    );
+    if (res.statusCode != 200) {
+      final err = CustomJsonUtil.toMap(res.body);
+      throw ApiException(err?['detail'] ?? '컬럼 수정 실패');
+    }
+    return ColumnItem.fromJson(
+      CustomJsonUtil.decode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// DELETE /v1/boards/{boardId}/columns/{columnId} - 컬럼 삭제 (owner)
+  Future<void> deleteColumn(String sessionToken, int boardId, int columnId) async {
+    final res = await http.delete(
+      Uri.parse(_url('/v1/boards/$boardId/columns/$columnId')),
+      headers: _authHeaders(sessionToken),
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '컬럼 삭제 실패');
+    }
+  }
+
   /// POST /v1/cards - 카드 생성
   Future<CardItem> createCard(
     String sessionToken, {
@@ -229,6 +294,18 @@ class ApiClient {
     if (res.statusCode != 200 && res.statusCode != 404) {
       final body = CustomJsonUtil.toMap(res.body);
       throw ApiException(body?['detail'] ?? '로그아웃 실패');
+    }
+  }
+
+  /// DELETE /v1/auth/me
+  Future<void> deleteMe(String sessionToken) async {
+    final res = await http.delete(
+      Uri.parse(_url('/v1/auth/me')),
+      headers: _authHeaders(sessionToken),
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '회원 탈퇴 실패');
     }
   }
 }

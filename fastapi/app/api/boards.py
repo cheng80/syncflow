@@ -121,6 +121,17 @@ class JoinBoardRequest(BaseModel):
     code: str
 
 
+class CreateColumnRequest(BaseModel):
+    title: str
+    is_done: bool = False
+
+
+class UpdateColumnRequest(BaseModel):
+    title: str | None = None
+    is_done: bool | None = None
+    position: int | None = None
+
+
 @router.post("/join")
 async def join_board_by_code(
     req: JoinBoardRequest,
@@ -178,6 +189,174 @@ async def join_board_by_code(
             cursor.execute("SELECT title FROM boards WHERE id = %s", (board_id,))
             title = cursor.fetchone()[0]
             return {"board_id": board_id, "title": title}
+    finally:
+        conn.close()
+
+
+def _normalize_column_positions(cursor, board_id: int) -> None:
+    cursor.execute(
+        "SELECT id FROM columns WHERE board_id = %s ORDER BY position, id",
+        (board_id,),
+    )
+    for i, (col_id,) in enumerate(cursor.fetchall()):
+        cursor.execute("UPDATE columns SET position = %s WHERE id = %s", (i * 1000, col_id))
+
+
+@router.post("/{board_id}/columns")
+async def create_column(
+    board_id: int,
+    req: CreateColumnRequest,
+    user_id: int = Depends(get_current_user_id),
+):
+    title = (req.title or "").strip()
+    if not title:
+        raise HTTPException(status_code=400, detail="컬럼 제목을 입력하세요.")
+
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+            _check_board_owner(cursor, board_id, user_id)
+
+            cursor.execute(
+                "SELECT COALESCE(MAX(position), -1000) + 1000 FROM columns WHERE board_id = %s",
+                (board_id,),
+            )
+            new_pos = int(cursor.fetchone()[0])
+            cursor.execute(
+                "INSERT INTO columns (board_id, title, position, is_done) VALUES (%s, %s, %s, %s)",
+                (board_id, title, new_pos, req.is_done),
+            )
+            col_id = cursor.lastrowid
+            cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
+            conn.commit()
+            return {"id": col_id, "title": title, "position": new_pos, "is_done": req.is_done}
+    finally:
+        conn.close()
+
+
+@router.patch("/{board_id}/columns/{column_id}")
+async def update_column(
+    board_id: int,
+    column_id: int,
+    req: UpdateColumnRequest,
+    user_id: int = Depends(get_current_user_id),
+):
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+            _check_board_owner(cursor, board_id, user_id)
+
+            cursor.execute(
+                "SELECT id FROM columns WHERE id = %s AND board_id = %s",
+                (column_id, board_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="컬럼을 찾을 수 없습니다.")
+
+            updates = []
+            params = []
+            if req.title is not None:
+                title = req.title.strip()
+                if not title:
+                    raise HTTPException(status_code=400, detail="컬럼 제목을 입력하세요.")
+                updates.append("title = %s")
+                params.append(title)
+            if req.is_done is not None:
+                updates.append("is_done = %s")
+                params.append(req.is_done)
+            if req.position is not None:
+                updates.append("position = %s")
+                params.append(req.position)
+
+            if not updates:
+                raise HTTPException(status_code=400, detail="수정할 항목이 없습니다.")
+
+            params.append(column_id)
+            cursor.execute(f"UPDATE columns SET {', '.join(updates)} WHERE id = %s", params)
+
+            if req.position is not None:
+                _normalize_column_positions(cursor, board_id)
+
+            cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
+            conn.commit()
+
+            cursor.execute(
+                "SELECT id, title, position, is_done FROM columns WHERE id = %s",
+                (column_id,),
+            )
+            col = cursor.fetchone()
+            return {
+                "id": col[0],
+                "title": col[1],
+                "position": col[2],
+                "is_done": bool(col[3]),
+            }
+    finally:
+        conn.close()
+
+
+@router.delete("/{board_id}/columns/{column_id}")
+async def delete_column(
+    board_id: int,
+    column_id: int,
+    user_id: int = Depends(get_current_user_id),
+):
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+            _check_board_owner(cursor, board_id, user_id)
+
+            cursor.execute(
+                "SELECT id, position FROM columns WHERE board_id = %s ORDER BY position, id",
+                (board_id,),
+            )
+            rows = cursor.fetchall()
+            if not rows:
+                raise HTTPException(status_code=404, detail="컬럼을 찾을 수 없습니다.")
+            if len(rows) <= 1:
+                raise HTTPException(status_code=400, detail="컬럼은 최소 1개 이상 있어야 합니다.")
+
+            ordered_ids = [r[0] for r in rows]
+            if column_id not in ordered_ids:
+                raise HTTPException(status_code=404, detail="컬럼을 찾을 수 없습니다.")
+
+            idx = ordered_ids.index(column_id)
+            fallback_id = ordered_ids[idx - 1] if idx > 0 else ordered_ids[idx + 1]
+
+            cursor.execute(
+                "UPDATE cards SET column_id = %s, updated_by = %s WHERE board_id = %s AND column_id = %s AND status = 'active'",
+                (fallback_id, user_id, board_id, column_id),
+            )
+            moved_count = cursor.rowcount
+
+            cursor.execute("DELETE FROM columns WHERE id = %s", (column_id,))
+            _normalize_column_positions(cursor, board_id)
+            cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
+            conn.commit()
+
+            return {
+                "ok": True,
+                "fallback_column_id": fallback_id,
+                "moved_card_count": moved_count,
+            }
     finally:
         conn.close()
 

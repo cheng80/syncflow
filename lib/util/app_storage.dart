@@ -51,4 +51,19 @@ class AppStorage {
 
   static Future<void> setWakelockEnabled(bool enabled) =>
       _storage.write(_keyWakelock, enabled);
+
+  // ─── 튜토리얼 (ShowcaseView) ─────────────────
+  static const String _keyTutorialCompleted = 'tutorial_completed';
+
+  /// 튜토리얼 완료 여부
+  static bool getTutorialCompleted() =>
+      _storage.read<bool>(_keyTutorialCompleted) ?? false;
+
+  /// 튜토리얼 완료 저장
+  static Future<void> setTutorialCompleted() =>
+      _storage.write(_keyTutorialCompleted, true);
+
+  /// 튜토리얼 완료 초기화 (다시 보기용)
+  static Future<void> resetTutorialCompleted() =>
+      _storage.write(_keyTutorialCompleted, false);
 }

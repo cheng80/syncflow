@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:syncflow/model/board.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
+import 'package:syncflow/widget/card_markdown_preview.dart';
 
 /// 카드 타일 (보드 컬럼 내 카드 표시)
 class CardTile extends StatelessWidget {
@@ -49,7 +50,7 @@ class CardTile extends StatelessWidget {
                         fontWeight: FontWeight.w500,
                         color: p.textPrimary,
                       ),
-                      maxLines: 2,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -66,8 +67,9 @@ class CardTile extends StatelessWidget {
               ),
               if (card.description.isNotEmpty) ...[
                 const SizedBox(height: 8),
+                // 카드 목록에서는 Markdown 원문이 아닌 요약 텍스트를 노출한다.
                 Text(
-                  card.description,
+                  markdownToPreviewSummary(card.description),
                   style: TextStyle(
                     fontSize: ConfigUI.fontSizeLabel,
                     color: p.textSecondary,

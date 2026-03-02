@@ -77,26 +77,26 @@
 - [x] 4.3 FastAPI: CARD_CREATE/MOVE/UPDATE 이벤트 처리 (fastapi/app/ws/)
 - [x] 4.4 Flutter: WebSocket 연결/재연결, JOIN_BOARD (lib/service/ws_service.dart)
 - [x] 4.5 Flutter: 이벤트 수신 → Riverpod 상태 반영 (optimistic update) (lib/vm/)
-- [ ] 4.6 Flutter: Presence UI (접속자 아바타) (lib/view/)
+- [x] 4.6 Flutter: Presence UI (접속자 아바타) (lib/view/)
 
 **참조**: WebSocket 이벤트 스펙 v1
 
 ### Phase 5: Soft Lock 및 Owner Lock
 **목표**: 카드 편집 충돌 방지, Owner Lock 지원
 
-- [ ] 5.1 FastAPI: Soft lock 메모리 저장, TTL 30초, RENEW/RELEASE (fastapi/app/ws/)
-- [ ] 5.2 FastAPI: LOCK_ACQUIRE/RENEW/RELEASE, CARD_LOCKED/UNLOCKED (fastapi/app/ws/)
-- [ ] 5.3 Flutter: 카드 상세 진입 시 LOCK_ACQUIRE, 저장/취소 시 RELEASE (lib/vm/, lib/view/)
-- [ ] 5.4 Flutter: 잠긴 카드 읽기 전용, "OO님이 편집 중" 표시 (lib/view/)
+- [x] 5.1 FastAPI: Soft lock 메모리 저장, TTL 30초, RENEW/RELEASE (fastapi/app/ws/)
+- [x] 5.2 FastAPI: LOCK_ACQUIRE/RENEW/RELEASE, CARD_LOCKED/UNLOCKED (fastapi/app/ws/)
+- [x] 5.3 Flutter: 카드 상세 진입 시 LOCK_ACQUIRE, 저장/취소 시 RELEASE (lib/vm/, lib/view/)
+- [x] 5.4 Flutter: 잠긴 카드 읽기 전용, "OO님이 편집 중" 표시 (lib/view/)
 - [ ] 5.5 (옵션) Owner Lock: owner_lock 필드, CARD_OWNER_LOCK_SET (ERD 반영)
 
 **참조**: WebSocket 스펙 6절, 7.0.2
 
 ### Phase 6: 2차 확장 (MVP 이후)
 
-- [ ] 6.1 멤버 초대 (board_invites, 초대 코드)
-- [ ] 6.2 컬럼 추가/수정/삭제/재정렬
-- [ ] 6.3 Markdown 확장 (체크리스트, @멘션)
+- [x] 6.1 멤버 초대 (board_invites, 초대 코드)
+- [x] 6.2 컬럼 추가/수정/삭제/재정렬
+- [x] 6.3 Markdown 확장 (체크리스트, @멘션)
 
 ---
 
@@ -194,4 +194,4 @@ fastapi/app/
 
 ---
 
-*작성일: 2026-03-02 | 최종 갱신: Phase 0 완료*
+*작성일: 2026-03-02 | 최종 갱신: Phase 6.3 완료*

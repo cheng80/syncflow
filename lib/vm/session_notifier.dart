@@ -80,6 +80,20 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
     state = const AsyncData(SessionState());
   }
 
+  /// 회원 탈퇴
+  Future<void> deleteAccount() async {
+    final current = state.value;
+    final token = current?.sessionToken;
+    if (token == null) {
+      await SessionSecureStorage.clearSession();
+      state = const AsyncData(SessionState());
+      return;
+    }
+    await ApiClient().deleteMe(token);
+    await SessionSecureStorage.clearSession();
+    state = const AsyncData(SessionState());
+  }
+
   /// 로그인 성공 시 세션 저장 (Secure Storage + state)
   Future<void> loginSuccess(String token, String expiresAt, int userId) async {
     await SessionSecureStorage.saveSession(token, expiresAt, userId: userId);

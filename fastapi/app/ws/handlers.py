@@ -10,18 +10,31 @@ from fastapi import WebSocket
 
 from app.database.connection import connect_db
 from app.ws.room import join_room, leave_room, leave_all_rooms, broadcast_to_board, get_room_members
+from app.ws.lock import acquire_lock, renew_lock, release_lock, release_locks_by_user
 
 # ws -> set of board_ids (현재 참여 중인 보드)
 _ws_boards: dict[WebSocket, set[int]] = {}
 
 
 def _get_user_display(cursor, user_id: int) -> str:
+    email = _get_user_email(cursor, user_id)
+    if email:
+        return _to_short_display(email)
+    return f"user_{user_id}"
+
+
+def _get_user_email(cursor, user_id: int) -> str:
     cursor.execute("SELECT email FROM users WHERE id = %s", (user_id,))
     row = cursor.fetchone()
-    if row:
-        email = row[0] or ""
-        return email.split("@")[0] if "@" in email else email
-    return f"user_{user_id}"
+    return (row[0] or "") if row else ""
+
+
+def _to_short_display(email: str) -> str:
+    if "@" in email:
+        local, domain = email.split("@", 1)
+        domain_head = domain.split(".", 1)[0]
+        return f"{local}@{domain_head}"
+    return email
 
 
 def _check_board_member(cursor, board_id: int, user_id: int) -> bool:
@@ -41,19 +54,27 @@ def _get_online_members(board_id: int) -> list[dict]:
             for ws in get_room_members(board_id):
                 uid = getattr(ws, "_user_id", None)
                 if uid is not None:
+                    email = _get_user_email(cursor, uid)
                     members.append({
                         "user_id": uid,
-                        "display": _get_user_display(cursor, uid),
+                        "display": _to_short_display(email) if email else f"user_{uid}",
+                        "email": email,
                     })
             return members
     finally:
         conn.close()
 
 
-async def _send_error(ws: WebSocket, code: str, message: str, req_id: str | None = None) -> None:
+async def _send_error(
+    ws: WebSocket,
+    code: str,
+    message: str,
+    req_id: str | None = None,
+    detail: dict | None = None,
+) -> None:
     payload = {
         "type": "ERROR",
-        "data": {"code": code, "message": message, "detail": {}},
+        "data": {"code": code, "message": message, "detail": detail or {}},
     }
     if req_id:
         payload["req_id"] = req_id
@@ -101,16 +122,25 @@ async def _handle_join_board(ws: WebSocket, user_id: int, data: dict, req_id: st
 
     # PRESENCE_JOINED broadcast (다른 클라이언트에게)
     display = None
+    email = ""
     conn = connect_db()
     try:
         with conn.cursor() as cursor:
-            display = _get_user_display(cursor, user_id)
+            email = _get_user_email(cursor, user_id)
+            display = _to_short_display(email) if email else f"user_{user_id}"
     finally:
         conn.close()
 
     await broadcast_to_board(board_id, {
         "type": "PRESENCE_JOINED",
-        "data": {"board_id": board_id, "user": {"user_id": user_id, "display": display or f"user_{user_id}"}},
+        "data": {
+            "board_id": board_id,
+            "user": {
+                "user_id": user_id,
+                "display": display or f"user_{user_id}",
+                "email": email,
+            },
+        },
     })
 
 
@@ -577,6 +607,133 @@ async def _handle_card_restore(ws: WebSocket, user_id: int, data: dict, req_id: 
         conn.close()
 
 
+async def _handle_lock_acquire(ws: WebSocket, user_id: int, data: dict, req_id: str | None) -> None:
+    board_id = data.get("board_id")
+    card_id = data.get("card_id")
+    if not board_id or not card_id:
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id 필요", req_id)
+        return
+
+    try:
+        board_id = int(board_id)
+        card_id = int(card_id)
+    except (TypeError, ValueError):
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id는 정수여야 합니다", req_id)
+        return
+
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            if not _check_board_member(cursor, board_id, user_id):
+                await _send_error(ws, "FORBIDDEN", "보드 접근 권한이 없습니다", req_id)
+                return
+            cursor.execute(
+                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status = 'active'",
+                (card_id, board_id),
+            )
+            if not cursor.fetchone():
+                await _send_error(ws, "NOT_FOUND", "카드를 찾을 수 없습니다", req_id)
+                return
+            display = _get_user_display(cursor, user_id)
+    finally:
+        conn.close()
+
+    ok, lock = acquire_lock(
+        board_id=board_id,
+        card_id=card_id,
+        user_id=user_id,
+        display=display,
+    )
+    if not ok:
+        await _send_error(
+            ws,
+            "LOCKED",
+            "다른 사용자가 편집 중입니다",
+            req_id,
+            detail={
+                "card_id": card_id,
+                "locked_by_user_id": lock["user_id"],
+                "locked_by_display": lock["display"],
+                "expires_at": lock["expires_at"],
+            },
+        )
+        return
+
+    payload = {
+        "type": "CARD_LOCKED",
+        "data": {
+            "board_id": board_id,
+            "card_id": card_id,
+            "locked_by": {"user_id": lock["user_id"], "display": lock["display"]},
+            "expires_at": lock["expires_at"],
+        },
+    }
+    if req_id:
+        payload["req_id"] = req_id
+    await broadcast_to_board(board_id, payload)
+
+
+async def _handle_lock_renew(ws: WebSocket, user_id: int, data: dict, req_id: str | None) -> None:
+    board_id = data.get("board_id")
+    card_id = data.get("card_id")
+    if not board_id or not card_id:
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id 필요", req_id)
+        return
+
+    try:
+        board_id = int(board_id)
+        card_id = int(card_id)
+    except (TypeError, ValueError):
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id는 정수여야 합니다", req_id)
+        return
+
+    ok, lock = renew_lock(card_id=card_id, user_id=user_id)
+    if not ok:
+        await _send_error(ws, "LOCKED", "락 갱신 실패", req_id)
+        return
+
+    payload = {
+        "type": "CARD_LOCKED",
+        "data": {
+            "board_id": board_id,
+            "card_id": card_id,
+            "locked_by": {"user_id": lock["user_id"], "display": lock["display"]},
+            "expires_at": lock["expires_at"],
+        },
+    }
+    if req_id:
+        payload["req_id"] = req_id
+    await broadcast_to_board(board_id, payload)
+
+
+async def _handle_lock_release(ws: WebSocket, user_id: int, data: dict, req_id: str | None) -> None:
+    board_id = data.get("board_id")
+    card_id = data.get("card_id")
+    if not board_id or not card_id:
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id 필요", req_id)
+        return
+
+    try:
+        board_id = int(board_id)
+        card_id = int(card_id)
+    except (TypeError, ValueError):
+        await _send_error(ws, "VALIDATION_ERROR", "board_id, card_id는 정수여야 합니다", req_id)
+        return
+
+    ok, _ = release_lock(card_id=card_id, user_id=user_id)
+    if not ok:
+        await _send_error(ws, "LOCKED", "락 해제 실패", req_id)
+        return
+
+    payload = {
+        "type": "CARD_UNLOCKED",
+        "data": {"board_id": board_id, "card_id": card_id},
+    }
+    if req_id:
+        payload["req_id"] = req_id
+    await broadcast_to_board(board_id, payload)
+
+
 async def handle_ws_messages(websocket: WebSocket, user_id: int) -> None:
     """메시지 수신 루프"""
     setattr(websocket, "_user_id", user_id)
@@ -608,11 +765,25 @@ async def handle_ws_messages(websocket: WebSocket, user_id: int) -> None:
                 await _handle_card_archive(websocket, user_id, data, req_id)
             elif msg_type == "CARD_RESTORE":
                 await _handle_card_restore(websocket, user_id, data, req_id)
+            elif msg_type == "LOCK_ACQUIRE":
+                await _handle_lock_acquire(websocket, user_id, data, req_id)
+            elif msg_type == "LOCK_RENEW":
+                await _handle_lock_renew(websocket, user_id, data, req_id)
+            elif msg_type == "LOCK_RELEASE":
+                await _handle_lock_release(websocket, user_id, data, req_id)
             else:
                 await _send_error(websocket, "VALIDATION_ERROR", f"Unknown type: {msg_type}", req_id)
     except Exception:
         pass
     finally:
+        # 연결 종료 시 해당 사용자의 카드 락 해제
+        released = release_locks_by_user(user_id)
+        for lk in released:
+            await broadcast_to_board(lk["board_id"], {
+                "type": "CARD_UNLOCKED",
+                "data": {"board_id": lk["board_id"], "card_id": lk["card_id"]},
+            })
+
         # 연결 종료 시 모든 룸에서 제거
         if websocket in _ws_boards:
             for bid in list(_ws_boards[websocket]):

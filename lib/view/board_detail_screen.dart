@@ -3,6 +3,7 @@
 
 import 'dart:async';
 
+import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,12 +13,14 @@ import 'package:syncflow/navigation/custom_navigation_util.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/vm/card_handler.dart';
 import 'package:syncflow/util/config_ui.dart';
+import 'package:syncflow/util/markdown_input_formatter.dart';
 import 'package:syncflow/vm/board_detail_notifier.dart';
 import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/vm/ws_service_notifier.dart';
 import 'package:syncflow/vm/board_handler.dart';
 import 'package:syncflow/widget/card_detail_modal.dart';
+import 'package:syncflow/widget/markdown_help_dialog.dart';
 import 'package:syncflow/widget/card_tile.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
 
@@ -61,6 +64,7 @@ class BoardDetailScreen extends ConsumerWidget {
         ),
         actions: [
           if (isOwner) _InviteButton(boardId: boardId),
+          _PresenceAvatarsButton(boardId: boardId),
           const _WsConnectionIndicator(),
         ],
       ),
@@ -73,6 +77,7 @@ class BoardDetailScreen extends ConsumerWidget {
               child: _BoardColumnsView(
                 detail: prev,
                 boardId: boardId,
+                isOwner: isOwner,
                 onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
                 optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
               ),
@@ -84,11 +89,11 @@ class BoardDetailScreen extends ConsumerWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('오류: $e', style: TextStyle(color: context.appTheme.accent)),
+              Text('${context.tr('error')}: $e', style: TextStyle(color: context.appTheme.accent)),
               const SizedBox(height: 16),
               FilledButton(
                 onPressed: () => ref.invalidate(boardDetailProvider(boardId)),
-                child: const Text('다시 시도'),
+                child: Text(context.tr('retry')),
               ),
             ],
           ),
@@ -96,13 +101,14 @@ class BoardDetailScreen extends ConsumerWidget {
         data: (detail) {
           final effective = cachedDetail ?? detail;
           if (effective == null || effective.columns.isEmpty) {
-            return const Center(child: Text('보드를 불러올 수 없습니다.'));
+            return Center(child: Text(context.tr('boardLoadFailed')));
           }
           return _BoardWsBridge(
             boardId: boardId,
             child: _BoardColumnsView(
               detail: effective,
               boardId: boardId,
+              isOwner: isOwner,
               onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
               optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
             ),
@@ -118,12 +124,14 @@ class _BoardColumnsView extends StatefulWidget {
   const _BoardColumnsView({
     required this.detail,
     required this.boardId,
+    required this.isOwner,
     required this.onRefresh,
     this.optimisticMoves = const <int, OptimisticCardMove>{},
   });
 
   final BoardDetail detail;
   final int boardId;
+  final bool isOwner;
   final VoidCallback onRefresh;
   final Map<int, OptimisticCardMove> optimisticMoves;
 
@@ -158,21 +166,31 @@ class _BoardColumnsViewState extends State<_BoardColumnsView> {
             horizontal: ConfigUI.screenPaddingH,
             vertical: 8,
           ),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: List.generate(columns.length, (index) {
-                return _ColumnTab(
-                  label: columns[index].title,
-                  isSelected: _currentIndex == index,
-                  onTap: () => _pageController.animateToPage(
-                    index,
-                    duration: ConfigUI.durationMedium,
-                    curve: Curves.easeInOut,
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: List.generate(columns.length, (index) {
+                      return _ColumnTab(
+                        label: columns[index].title,
+                        isSelected: _currentIndex == index,
+                        onTap: () => _pageController.animateToPage(
+                          index,
+                          duration: ConfigUI.durationMedium,
+                          curve: Curves.easeInOut,
+                        ),
+                      );
+                    }),
                   ),
-                );
-              }),
-            ),
+                ),
+              ),
+              if (widget.isOwner) ...[
+                const SizedBox(width: 8),
+                _ColumnManageButton(boardId: widget.boardId, columns: columns),
+              ],
+            ],
           ),
         ),
         Expanded(
@@ -263,7 +281,7 @@ class _BoardWsBridge extends ConsumerStatefulWidget {
 }
 
 class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
-  late final _wsService = ref.read(wsServiceProvider);
+  late final dynamic _wsService;
   StreamSubscription<Map<String, dynamic>>? _msgSub;
   StreamSubscription<bool>? _connSub;
   bool _needsRejoin = false;
@@ -271,7 +289,7 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
   @override
   void initState() {
     super.initState();
-    _wsService; // initState에서 초기화 (ref 유효 시점)
+    _wsService = ref.read(wsServiceProvider);
     joinBoardRoom(ref, widget.boardId);
     _msgSub = _wsService.messages.listen(_onWsMessage);
     _connSub = _wsService.connectionState.listen((connected) async {
@@ -293,9 +311,33 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
   void _onWsMessage(Map<String, dynamic> msg) {
     final type = msg['type'] as String?;
     final data = msg['data'] as Map<String, dynamic>?;
+
+    if (type == 'BOARD_JOINED' && data != null) {
+      _applyBoardJoined(data);
+      return;
+    }
+    if (type == 'PRESENCE_JOINED' && data != null) {
+      _applyPresenceJoined(data);
+      return;
+    }
+    if (type == 'PRESENCE_LEFT' && data != null) {
+      _applyPresenceLeft(data);
+      return;
+    }
+    if (type == 'CARD_LOCKED' && data != null) {
+      _applyCardLocked(data);
+      return;
+    }
+    if (type == 'CARD_UNLOCKED' && data != null) {
+      _applyCardUnlocked(data);
+      return;
+    }
+
     if (type == 'ERROR') {
       final reqId = msg['req_id'] as String?;
-      final message = (data?['message'] as String?) ?? '실시간 동기화 오류';
+      final message = (data?['message'] as String?) ?? context.tr('syncError');
+      final code = data?['code'] as String?;
+      final detail = data?['detail'] as Map<String, dynamic>?;
       if (reqId != null) {
         final pendingReqIds = Set<String>.from(
           ref.read(pendingMoveReqIdsProvider(widget.boardId)),
@@ -306,6 +348,27 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
           ref.read(pendingMoveRetryCountProvider(widget.boardId)),
         )..remove(reqId);
         ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+      }
+      if (code == 'LOCKED' && detail != null) {
+        final cardId = (detail['card_id'] as num?)?.toInt();
+        final lockedByUserId = (detail['locked_by_user_id'] as num?)?.toInt();
+        final lockedByDisplay = detail['locked_by_display'] as String?;
+        final expiresAt = (detail['expires_at'] as num?)?.toInt();
+        if (cardId != null &&
+            lockedByUserId != null &&
+            lockedByDisplay != null &&
+            expiresAt != null) {
+          final locks = Map<int, CardLockState>.from(
+            ref.read(cardLocksProvider(widget.boardId)),
+          );
+          locks[cardId] = CardLockState(
+            cardId: cardId,
+            lockedByUserId: lockedByUserId,
+            lockedByDisplay: lockedByDisplay,
+            expiresAt: expiresAt,
+          );
+          ref.read(cardLocksProvider(widget.boardId).notifier).state = locks;
+        }
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
@@ -428,6 +491,86 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       cards: nextCards,
       boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
+  }
+
+  void _applyBoardJoined(Map<String, dynamic> data) {
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final membersRaw = data['members_online'] as List?;
+    if (membersRaw == null) return;
+
+    final members = membersRaw
+        .whereType<Map>()
+        .map((e) => PresenceMember(
+              userId: (e['user_id'] as num).toInt(),
+              display: (e['display'] as String?) ?? 'user',
+              email: e['email'] as String?,
+            ))
+        .toList();
+    ref.read(presenceMembersProvider(widget.boardId).notifier).state = members;
+  }
+
+  void _applyPresenceJoined(Map<String, dynamic> data) {
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final user = data['user'] as Map<String, dynamic>?;
+    if (user == null) return;
+    final userId = (user['user_id'] as num?)?.toInt();
+    if (userId == null) return;
+    final display = (user['display'] as String?) ?? 'user';
+    final email = user['email'] as String?;
+
+    final current = ref.read(presenceMembersProvider(widget.boardId));
+    if (current.any((m) => m.userId == userId)) return;
+    ref.read(presenceMembersProvider(widget.boardId).notifier).state = [
+      ...current,
+      PresenceMember(userId: userId, display: display, email: email),
+    ];
+  }
+
+  void _applyPresenceLeft(Map<String, dynamic> data) {
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final userId = (data['user_id'] as num?)?.toInt();
+    if (userId == null) return;
+    final current = ref.read(presenceMembersProvider(widget.boardId));
+    ref.read(presenceMembersProvider(widget.boardId).notifier).state = current
+        .where((m) => m.userId != userId)
+        .toList();
+  }
+
+  void _applyCardLocked(Map<String, dynamic> data) {
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final cardId = (data['card_id'] as num?)?.toInt();
+    final lockedBy = data['locked_by'] as Map<String, dynamic>?;
+    final expiresAt = (data['expires_at'] as num?)?.toInt();
+    if (cardId == null || lockedBy == null || expiresAt == null) return;
+    final userId = (lockedBy['user_id'] as num?)?.toInt();
+    final display = lockedBy['display'] as String?;
+    if (userId == null || display == null) return;
+
+    final locks = Map<int, CardLockState>.from(
+      ref.read(cardLocksProvider(widget.boardId)),
+    );
+    locks[cardId] = CardLockState(
+      cardId: cardId,
+      lockedByUserId: userId,
+      lockedByDisplay: display,
+      expiresAt: expiresAt,
+    );
+    ref.read(cardLocksProvider(widget.boardId).notifier).state = locks;
+  }
+
+  void _applyCardUnlocked(Map<String, dynamic> data) {
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final cardId = (data['card_id'] as num?)?.toInt();
+    if (cardId == null) return;
+    final locks = Map<int, CardLockState>.from(
+      ref.read(cardLocksProvider(widget.boardId)),
+    )..remove(cardId);
+    ref.read(cardLocksProvider(widget.boardId).notifier).state = locks;
   }
 
   void _applyCardMoved(Map<String, dynamic> data) {
@@ -556,6 +699,351 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
   }
 }
 
+class _ColumnManageButton extends ConsumerStatefulWidget {
+  const _ColumnManageButton({
+    required this.boardId,
+    required this.columns,
+  });
+
+  final int boardId;
+  final List<ColumnItem> columns;
+
+  @override
+  ConsumerState<_ColumnManageButton> createState() => _ColumnManageButtonState();
+}
+
+class _ColumnManageButtonState extends ConsumerState<_ColumnManageButton> {
+  void _openSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _ColumnManageSheet(
+        boardId: widget.boardId,
+        initialColumns: widget.columns,
+        onChanged: () {
+          ref.invalidate(boardDetailProvider(widget.boardId));
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: _openSheet,
+      icon: const Icon(Icons.tune, size: 18),
+      label: Text(context.tr('columnManage')),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      ),
+    );
+  }
+}
+
+class _ColumnManageSheet extends ConsumerStatefulWidget {
+  const _ColumnManageSheet({
+    required this.boardId,
+    required this.initialColumns,
+    required this.onChanged,
+  });
+
+  final int boardId;
+  final List<ColumnItem> initialColumns;
+  final VoidCallback onChanged;
+
+  @override
+  ConsumerState<_ColumnManageSheet> createState() => _ColumnManageSheetState();
+}
+
+class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
+  static const int _columnTitleMaxLength = 40;
+  late List<ColumnItem> _columns;
+  bool _loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _columns = List<ColumnItem>.from(widget.initialColumns)
+      ..sort((a, b) => a.position.compareTo(b.position));
+  }
+
+  Future<String?> _requireToken() async {
+    final session = ref.read(sessionNotifierProvider).value;
+    final token = session?.sessionToken;
+    if (token == null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('sessionExpired'))));
+    }
+    return token;
+  }
+
+  Future<void> _reloadColumns() async {
+    ref.invalidate(boardDetailProvider(widget.boardId));
+    final detail = await ref.read(boardDetailProvider(widget.boardId).future);
+    if (!mounted) return;
+    if (detail == null) return;
+    setState(() {
+      _columns = List<ColumnItem>.from(detail.columns)
+        ..sort((a, b) => a.position.compareTo(b.position));
+    });
+    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = detail;
+  }
+
+  Future<String?> _showTitleInputDialog({
+    required String title,
+    String initial = '',
+  }) async {
+    final controller = TextEditingController(text: initial);
+    return showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          maxLength: _columnTitleMaxLength,
+          maxLengthEnforcement: MaxLengthEnforcement.enforced,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            hintText: context.tr('columnTitle'),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => CustomNavigationUtil.back(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => CustomNavigationUtil.back(ctx, result: controller.text.trim()),
+            child: Text(context.tr('save')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _runColumnTask(Future<void> Function(String token) task) async {
+    final token = await _requireToken();
+    if (token == null) return;
+    setState(() => _loading = true);
+    try {
+      await task(token);
+      await _reloadColumns();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _addColumn() async {
+    final title = await _showTitleInputDialog(title: context.tr('columnAdd'));
+    if (title == null || title.isEmpty) return;
+    await _runColumnTask((token) async {
+      await ref.read(boardHandlerProvider).createColumn(
+            token,
+            widget.boardId,
+            title: title,
+          );
+    });
+  }
+
+  Future<void> _renameColumn(ColumnItem column) async {
+    final title = await _showTitleInputDialog(
+      title: context.tr('columnRename'),
+      initial: column.title,
+    );
+    if (title == null || title.isEmpty) return;
+    await _runColumnTask((token) async {
+      await ref.read(boardHandlerProvider).updateColumn(
+            token,
+            widget.boardId,
+            column.id,
+            title: title,
+          );
+    });
+  }
+
+  Future<void> _toggleDone(ColumnItem column, bool nextDone) async {
+    await _runColumnTask((token) async {
+      await ref.read(boardHandlerProvider).updateColumn(
+            token,
+            widget.boardId,
+            column.id,
+            isDone: nextDone,
+          );
+    });
+  }
+
+  Future<void> _moveColumn(int index, int direction) async {
+    final next = index + direction;
+    if (next < 0 || next >= _columns.length) return;
+    final basePos = _columns[next].position;
+    final targetPos = direction < 0 ? basePos - 1 : basePos + 1;
+    final col = _columns[index];
+    await _runColumnTask((token) async {
+      await ref.read(boardHandlerProvider).updateColumn(
+            token,
+            widget.boardId,
+            col.id,
+            position: targetPos,
+          );
+    });
+  }
+
+  Future<void> _deleteColumn(ColumnItem column) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('columnDelete')),
+        content: Text(context.tr('columnDeleteConfirm', namedArgs: {'name': column.title})),
+        actions: [
+          TextButton(
+            onPressed: () => CustomNavigationUtil.back(ctx, result: false),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => CustomNavigationUtil.back(ctx, result: true),
+            child: Text(context.tr('delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    await _runColumnTask((token) async {
+      await ref.read(boardHandlerProvider).deleteColumn(
+            token,
+            widget.boardId,
+            column.id,
+          );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(ConfigUI.sheetPaddingH),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Text(
+                  context.tr('columnManage'),
+                  style: TextStyle(
+                    fontSize: ConfigUI.fontSizeSubtitle,
+                    fontWeight: FontWeight.bold,
+                    color: p.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: _loading ? null : _addColumn,
+                  tooltip: context.tr('columnAdd'),
+                  icon: const Icon(Icons.add),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_columns.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(
+                  context.tr('noColumns'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: p.textSecondary),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _columns.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final col = _columns[index];
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: p.cardBackground,
+                        borderRadius: ConfigUI.cardRadius,
+                        border: Border.all(color: p.divider),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  col.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: ConfigUI.fontSizeBody,
+                                    color: p.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  col.isDone ? context.tr('columnDone') : context.tr('columnProgress'),
+                                  style: TextStyle(
+                                    fontSize: ConfigUI.fontSizeCaption,
+                                    color: p.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: (_loading || index == 0) ? null : () => _moveColumn(index, -1),
+                            icon: const Icon(Icons.arrow_upward, size: 18),
+                            tooltip: context.tr('moveUp'),
+                          ),
+                          IconButton(
+                            onPressed: (_loading || index == _columns.length - 1) ? null : () => _moveColumn(index, 1),
+                            icon: const Icon(Icons.arrow_downward, size: 18),
+                            tooltip: context.tr('moveDown'),
+                          ),
+                          IconButton(
+                            onPressed: _loading ? null : () => _renameColumn(col),
+                            icon: const Icon(Icons.edit_outlined, size: 18),
+                            tooltip: context.tr('rename'),
+                          ),
+                          Switch(
+                            value: col.isDone,
+                            onChanged: _loading ? null : (v) => _toggleDone(col, v),
+                          ),
+                          IconButton(
+                            onPressed: _loading ? null : () => _deleteColumn(col),
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            color: p.accent,
+                            tooltip: context.tr('delete'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 12),
+            FilledButton(
+              onPressed: () => CustomNavigationUtil.back(context),
+              child: Text(context.tr('close')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// 초대 코드 생성 및 공유 버튼 (owner만 표시)
 class _InviteButton extends ConsumerStatefulWidget {
   const _InviteButton({required this.boardId});
@@ -607,7 +1095,7 @@ class _InviteButtonState extends ConsumerState<_InviteButton> {
             )
           : const Icon(Icons.person_add),
       onPressed: _loading ? null : _showInviteSheet,
-      tooltip: '멤버 초대',
+      tooltip: context.tr('inviteMember'),
     );
   }
 }
@@ -628,7 +1116,7 @@ class _InviteCodeSheet extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            '멤버 초대',
+            context.tr('inviteMember'),
             style: TextStyle(
               fontSize: ConfigUI.fontSizeSubtitle,
               fontWeight: FontWeight.bold,
@@ -637,7 +1125,7 @@ class _InviteCodeSheet extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            '아래 코드를 팀원에게 공유하세요',
+            context.tr('inviteShareHint'),
             style: TextStyle(fontSize: ConfigUI.fontSizeBody, color: p.textSecondary),
           ),
           const SizedBox(height: 12),
@@ -668,11 +1156,11 @@ class _InviteCodeSheet extends StatelessWidget {
                   onPressed: () {
                     Clipboard.setData(ClipboardData(text: code));
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('초대 코드가 복사되었습니다')),
+                      SnackBar(content: Text(context.tr('inviteCodeCopied'))),
                     );
                   },
                   icon: const Icon(Icons.copy, size: 18),
-                  label: const Text('복사'),
+                  label: Text(context.tr('copy')),
                 ),
               ),
               const SizedBox(width: 12),
@@ -682,11 +1170,11 @@ class _InviteCodeSheet extends StatelessWidget {
                     Clipboard.setData(ClipboardData(text: code));
                     CustomNavigationUtil.back(context);
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('초대 코드가 복사되었습니다')),
+                      SnackBar(content: Text(context.tr('inviteCodeCopied'))),
                     );
                   },
                   icon: const Icon(Icons.share, size: 18),
-                  label: const Text('복사 후 닫기'),
+                  label: Text(context.tr('copyAndClose')),
                 ),
               ),
             ],
@@ -708,7 +1196,7 @@ class _WsConnectionIndicator extends ConsumerWidget {
       loading: () => _dot(context, false),
       error: (_, __) => _dot(context, false),
       data: (connected) => Tooltip(
-        message: connected ? '실시간 동기화 연결됨' : '실시간 동기화 끊김',
+        message: connected ? context.tr('syncConnected') : context.tr('syncDisconnected'),
         child: Padding(
           padding: const EdgeInsets.only(right: 12),
           child: _dot(context, connected),
@@ -730,6 +1218,143 @@ class _WsConnectionIndicator extends ConsumerWidget {
             color: (connected ? Colors.green : Colors.grey).withValues(alpha: 0.5),
             blurRadius: 4,
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PresenceAvatarsButton extends ConsumerWidget {
+  const _PresenceAvatarsButton({required this.boardId});
+
+  final int boardId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final members = ref.watch(presenceMembersProvider(boardId));
+    if (members.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return IconButton(
+      tooltip: context.tr('presenceCount', namedArgs: {'count': '${members.length}'}),
+      onPressed: () {
+        showModalBottomSheet(
+          context: context,
+          builder: (ctx) => _PresenceMembersSheet(members: members),
+        );
+      },
+      icon: SizedBox(
+        width: 64,
+        child: Stack(
+          children: [
+            for (var i = 0; i < members.length && i < 3; i++)
+              Positioned(
+                left: i * 16,
+                child: _AvatarDot(label: members[i].display),
+              ),
+            if (members.length > 3)
+              Positioned(
+                left: 48,
+                child: Container(
+                  width: 18,
+                  height: 18,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    '+${members.length - 3}',
+                    style: const TextStyle(fontSize: 9, color: Colors.white),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarDot extends StatelessWidget {
+  const _AvatarDot({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final trimmed = label.trim();
+    final initial = trimmed.isEmpty
+        ? '?'
+        : String.fromCharCode(trimmed.runes.first).toUpperCase();
+    final colors = [
+      const Color(0xFFEF5350),
+      const Color(0xFF42A5F5),
+      const Color(0xFF66BB6A),
+      const Color(0xFFFFA726),
+      const Color(0xFFAB47BC),
+      const Color(0xFF26A69A),
+    ];
+    final color = colors[trimmed.hashCode.abs() % colors.length];
+    return Container(
+      width: 24,
+      height: 24,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white, width: 1.5),
+      ),
+      child: Text(
+        initial,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
+class _PresenceMembersSheet extends StatelessWidget {
+  const _PresenceMembersSheet({required this.members});
+  final List<PresenceMember> members;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+    return Padding(
+      padding: const EdgeInsets.all(ConfigUI.sheetPaddingH),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            context.tr('presenceConnecting', namedArgs: {'count': '${members.length}'}),
+            style: TextStyle(
+              fontSize: ConfigUI.fontSizeSubtitle,
+              fontWeight: FontWeight.bold,
+              color: p.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...members.map((m) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    _AvatarDot(label: m.display),
+                    const SizedBox(width: 10),
+                    Text(
+                      (m.email != null && m.email!.trim().isNotEmpty)
+                          ? m.email!
+                          : m.display,
+                      style: TextStyle(color: p.textPrimary),
+                    ),
+                  ],
+                ),
+              )),
+          const SizedBox(height: 12),
         ],
       ),
     );
@@ -826,7 +1451,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
               IconButton(
                 icon: const Icon(Icons.add),
                 onPressed: _showAddCardDialog,
-                tooltip: '카드 추가',
+                tooltip: context.tr('cardAdd'),
               ),
             ],
           ),
@@ -850,7 +1475,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
                   child: OutlinedButton.icon(
                     onPressed: _showAddCardDialog,
                     icon: const Icon(Icons.add, size: 20),
-                    label: const Text('카드 추가'),
+                    label: Text(context.tr('cardAdd')),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
@@ -973,7 +1598,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
           ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
           widget.onRefresh();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('카드 이동에 실패했습니다.')),
+            SnackBar(content: Text(context.tr('cardMoveFailed'))),
           );
         }
       }
@@ -1117,7 +1742,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       ref.invalidate(boardDetailProvider(widget.boardId));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('실시간 동기화 지연으로 화면을 새로고침했습니다.')),
+          SnackBar(content: Text(context.tr('syncRefresh'))),
         );
       }
     });
@@ -1202,29 +1827,46 @@ class _AddCardSheetState extends ConsumerState<_AddCardSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              '새 카드',
-              style: TextStyle(
-                fontSize: ConfigUI.fontSizeSubtitle,
-                fontWeight: FontWeight.bold,
-                color: context.appTheme.textPrimary,
-              ),
+            Row(
+              children: [
+                Text(
+                  context.tr('newCard'),
+                  style: TextStyle(
+                    fontSize: ConfigUI.fontSizeSubtitle,
+                    fontWeight: FontWeight.bold,
+                    color: context.appTheme.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  tooltip: context.tr('markdownHelp'),
+                  onPressed: () => showMarkdownHelpDialog(context),
+                  icon: const Icon(Icons.help_outline),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _titleController,
-              decoration: const InputDecoration(
-                hintText: '제목',
-                border: OutlineInputBorder(),
+              maxLength: ConfigUI.cardTitleMaxLength,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              decoration: InputDecoration(
+                hintText: context.tr('cardTitle'),
+                border: const OutlineInputBorder(),
               ),
               autofocus: true,
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _descController,
-              decoration: const InputDecoration(
-                hintText: '설명 (선택)',
-                border: OutlineInputBorder(),
+              maxLength: ConfigUI.cardDescriptionMaxLength,
+              maxLengthEnforcement: MaxLengthEnforcement.enforced,
+              inputFormatters: [
+                MaxLinesTextInputFormatter(ConfigUI.cardDescriptionMaxLines),
+              ],
+              decoration: InputDecoration(
+                hintText: context.tr('descriptionOptional'),
+                border: const OutlineInputBorder(),
               ),
               maxLines: 3,
             ),
@@ -1237,7 +1879,7 @@ class _AddCardSheetState extends ConsumerState<_AddCardSheet> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('추가'),
+                  : Text(context.tr('add')),
             ),
           ],
         ),

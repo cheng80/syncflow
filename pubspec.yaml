@@ -67,6 +67,8 @@ dependencies:
 
   showcaseview: ^5.0.1 # 기능 소개 화면 설정
   in_app_review: ^2.0.11 # 앱 리뷰 기능
+  flutter_markdown_plus: ^1.0.3
+  markdown: ^7.3.0
 
   # 화면 깨우기
   wakelock_plus: ^1.4.0

@@ -90,6 +90,20 @@ inAppReview.openStoreListing(appStoreId: '앱스토어ID');
 
 ---
 
+## 5-1. SyncFlow 적용 방안
+
+| 기능 | 호출 시점 | 메서드 |
+|------|-----------|--------|
+| 인앱 리뷰 팝업 | MainScaffold 진입 후 2초, 첫 실행 3일 경과 시 | `maybeRequestReview()` |
+| 평점 남기기 버튼 | Drawer/설정 메뉴 | `openStoreListing(appStoreId: '...')` |
+
+- **첫 실행일**: `main.dart`에서 `AppStorage.saveFirstLaunchDate()` 최초 1회 저장
+- **maybeRequestReview**: `_InAppReviewTrigger`에서 MainScaffold 진입 시 1회만 자동 호출
+- **appStoreId**: `lib/service/in_app_review_service.dart`에 출시 시 추가 예정 (현재 빈 문자열)
+- **관련 파일**: `in_app_review_service.dart`, `app_storage.dart`, `main.dart`, `main_scaffold.dart`, `app_drawer.dart`
+
+---
+
 ## 6. 플랫폼별 요구사항
 
 - **Android**: API 21+, Google Play Store 설치 필요
