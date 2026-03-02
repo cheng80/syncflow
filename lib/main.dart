@@ -108,7 +108,29 @@ class MyApp extends ConsumerWidget {
           onSurface: const Color(0xFF212121),
         ),
         filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(foregroundColor: Colors.white),
+          style: FilledButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Colors.black, width: 3),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Colors.black, width: 3),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Colors.black, width: 3),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Color(0xFF1976D2), width: 3),
+          ),
         ),
       ),
       darkTheme: ThemeData(
@@ -121,7 +143,29 @@ class MyApp extends ConsumerWidget {
           onSurface: Colors.white,
         ),
         filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(foregroundColor: Colors.white),
+          style: FilledButton.styleFrom(
+            foregroundColor: Colors.white,
+            side: const BorderSide(color: Colors.white70, width: 3),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: OutlinedButton.styleFrom(
+            side: const BorderSide(color: Colors.white70, width: 3),
+          ),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Colors.white70, width: 3),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Colors.white70, width: 3),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(6),
+            borderSide: const BorderSide(color: Color(0xFF1976D2), width: 3),
+          ),
         ),
       ),
       home: sessionAsync.when(

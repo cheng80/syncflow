@@ -74,27 +74,61 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
       appBar: AppBar(
         backgroundColor: context.appTheme.background,
         scrolledUnderElevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => CustomNavigationUtil.back(context),
-        ),
-        title: Text(
-          _title,
-          style: TextStyle(
-            color: context.appTheme.textPrimary,
-            fontSize: ConfigUI.fontSizeAppBar,
+        toolbarHeight: 96,
+        leadingWidth: 0,
+        leading: const SizedBox.shrink(),
+        titleSpacing: 0,
+        title: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // 1행: 뒤로가기 + 제목(가운데) + 삭제/이름변경 메뉴
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back),
+                    onPressed: () => CustomNavigationUtil.back(context),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Text(
+                        _title,
+                        style: TextStyle(
+                          color: context.appTheme.textPrimary,
+                          fontSize: ConfigUI.fontSizeAppBar,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                  if (isOwner)
+                    _BoardMenuButton(
+                      boardId: widget.boardId,
+                      currentTitle: _title,
+                      onTitleChanged: (newTitle) => setState(() => _title = newTitle),
+                    )
+                  else
+                    const SizedBox(width: 48),
+                ],
+              ),
+              const SizedBox(height: 8),
+              // 2행: 초대, 접속자, 연결상태
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (isOwner) _InviteButton(boardId: widget.boardId),
+                  _PresenceAvatarsButton(boardId: widget.boardId),
+                  const _WsConnectionIndicator(),
+                ],
+              ),
+            ],
           ),
         ),
-        actions: [
-          if (isOwner) _BoardMenuButton(
-            boardId: widget.boardId,
-            currentTitle: _title,
-            onTitleChanged: (newTitle) => setState(() => _title = newTitle),
-          ),
-          if (isOwner) _InviteButton(boardId: widget.boardId),
-          _PresenceAvatarsButton(boardId: widget.boardId),
-          const _WsConnectionIndicator(),
-        ],
       ),
       body: detailAsync.when(
         loading: () {
@@ -1394,6 +1428,7 @@ class _PresenceAvatarsButton extends ConsumerWidget {
       },
       icon: SizedBox(
         width: 64,
+        height: 24,
         child: Stack(
           children: [
             for (var i = 0; i < members.length && i < 3; i++)
@@ -1582,10 +1617,13 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: ConfigUI.screenPaddingH,
-            vertical: 12,
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: p.primary.withValues(alpha: 0.15),
+            borderRadius: ConfigUI.cardRadius,
+            border: Border.all(color: p.borderBrutal, width: ConfigUI.borderWidthBrutal),
           ),
           child: Row(
             children: [
@@ -1606,16 +1644,31 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
             ],
           ),
         ),
+        const SizedBox(height: ConfigUI.gapColumnHeaderToCards),
         Expanded(
           child: ReorderableListView.builder(
-            padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
+            padding: EdgeInsets.only(
+              left: ConfigUI.screenPaddingH,
+              right: ConfigUI.screenPaddingH,
+              top: 0,
+              bottom: ConfigUI.gapBetweenCards,
+            ),
             itemCount: _displayCards.length + 1,
             onReorder: (oldIndex, newIndex) => _onReorder(oldIndex, newIndex),
-            proxyDecorator: (child, index, animation) => Material(
-              elevation: ConfigUI.elevationDragProxy,
-              borderRadius: ConfigUI.cardRadius,
-              child: child,
-            ),
+            proxyDecorator: (child, index, animation) {
+              final scale = Tween<double>(begin: 1, end: 1.04).animate(animation);
+              return AnimatedBuilder(
+                animation: animation,
+                builder: (_, __) => Transform.scale(
+                  scale: scale.value,
+                  child: Material(
+                    elevation: ConfigUI.elevationDragProxy,
+                    borderRadius: ConfigUI.cardRadius,
+                    child: child,
+                  ),
+                ),
+              );
+            },
             buildDefaultDragHandles: true,
             itemBuilder: (context, index) {
               if (index == _displayCards.length) {
@@ -1635,7 +1688,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
               final card = _displayCards[index];
               return Padding(
                 key: ValueKey(card.id),
-                padding: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.only(bottom: ConfigUI.gapBetweenCards),
                 child: CardTile(
                   card: card,
                   onTap: () => _showCardDetail(card),

@@ -75,6 +75,10 @@ class AppThemeColors {
           ? const Color(0xFFF0F0F0)
           : const Color(0xFF212121);
 
+  /// Neo-Brutalism: 두꺼운 보더/오프셋 쉐도우용 (검정)
+  static Color borderBrutal(BuildContext context) =>
+      _isDark(context) ? const Color(0xFFE0E0E0) : Colors.black;
+
   /// 구분선 색
   static Color divider(BuildContext context) =>
       _isDark(context)
@@ -167,6 +171,7 @@ class AppThemeColorsHelper {
   Color get textMeta => AppThemeColors.textMeta(_context);
   Color get textOnPrimary => AppThemeColors.textOnPrimary(_context);
   Color get textOnSheet => AppThemeColors.textOnSheet(_context);
+  Color get borderBrutal => AppThemeColors.borderBrutal(_context);
   Color get divider => AppThemeColors.divider(_context);
   Color get icon => AppThemeColors.icon(_context);
   Color get iconOnSheet => AppThemeColors.iconOnSheet(_context);

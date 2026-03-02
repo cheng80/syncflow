@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.0.0+2
+version: 1.0.0+1
 
 environment:
   sdk: ^3.10.4
@@ -40,8 +40,6 @@ dependencies:
   
   flutter_riverpod: ^3.2.0 # 리버팟 상태관리 패키지
 
-  flutter_colorpicker: ^1.1.0 # 색상 선택 패키지
-
   # 로컬 스토리지
   get_storage: ^2.1.1 # GetStorage (GetX와 독립적으로 사용 가능한 스토리지 패키지)
   flutter_secure_storage: ^9.2.4 # 세션 토큰 등 민감 데이터 암호화 저장
@@ -51,13 +49,6 @@ dependencies:
   http: ^1.1.0 # HTTP 클라이언트 (NetworkUtil, AddressUtil에서 사용)
   web_socket_channel: ^3.0.1 # WebSocket 실시간 동기화
 
-  uuid: ^4.5.1  # device_uuid (참여자 식별)
-
-
-  timezone: ^0.10.0
-
-  # 권한 관리
-  permission_handler: ^12.0.1
 
 
 

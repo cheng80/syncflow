@@ -430,16 +430,17 @@ class _BoardTile extends StatelessWidget {
     final p = context.appTheme;
 
     return Material(
-      color: p.cardBackground,
-      borderRadius: ConfigUI.cardRadius,
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: ConfigUI.cardRadius,
         child: Container(
           padding: const EdgeInsets.all(ConfigUI.paddingCard),
           decoration: BoxDecoration(
+            color: p.cardBackground,
             borderRadius: ConfigUI.cardRadius,
-            border: Border.all(color: p.divider, width: 2),
+            border: Border.all(color: p.borderBrutal, width: ConfigUI.borderWidthBrutal),
+            boxShadow: ConfigUI.shadowOffsetBrutalCard(p.borderBrutal),
           ),
           child: Row(
             children: [

@@ -1,12 +1,12 @@
 // config_ui.dart
-// Flat + Minimalism + Soft UI 공통 설정 (접근성·일관성)
+// Neo-Brutalism + 접근성 공통 설정
 //
 // 위젯에서 ConfigUI.xxx 로 참조합니다.
 // 색상은 context.appTheme, 레이아웃/반경/애니메이션은 여기서 통일합니다.
 
 import 'package:flutter/material.dart';
 
-/// 앱 전역 UI 상수 (Soft UI 업그레이드 + 접근성)
+/// 앱 전역 UI 상수 (Neo-Brutalism 컨셉)
 class ConfigUI {
   ConfigUI._();
 
@@ -17,13 +17,19 @@ class ConfigUI {
   /// 포커스 링 두께 (키보드/스위치 포커스 가시성)
   static const double focusBorderWidth = 2.0;
 
-  // ─── 모서리 (Soft UI - 둥근 모서리) ───────────────────────────────────
-  static const double radiusCard = 12.0;
-  static const double radiusSheet = 16.0;
-  static const double radiusButton = 10.0;
-  static const double radiusInput = 8.0;
-  static const double radiusChip = 20.0;
-  static const double radiusTagCell = 8.0;
+  // ─── Neo-Brutalism: 두꺼운 보더·오프셋 쉐도우 ─────────────────────────
+  /// 카드/버튼/입력 보더 두께 (2~3px)
+  static const double borderWidthBrutal = 3.0;
+  /// 오프셋 쉐도우 거리 (6px)
+  static const double shadowOffsetBrutal = 6.0;
+
+  // ─── 모서리 (Neo-Brutalism: 둥글지 않음 또는 약한 radius) ─────────────
+  static const double radiusCard = 6.0;
+  static const double radiusSheet = 8.0;
+  static const double radiusButton = 6.0;
+  static const double radiusInput = 6.0;
+  static const double radiusChip = 6.0;
+  static const double radiusTagCell = 4.0;
 
   static BorderRadius get cardRadius => BorderRadius.circular(radiusCard);
   static BorderRadius get sheetRadius => BorderRadius.circular(radiusSheet);
@@ -33,9 +39,18 @@ class ConfigUI {
   static BorderRadius get tagCellRadius =>
       BorderRadius.circular(radiusTagCell);
 
-  // ─── 그림자·입체감 (Soft UI - 부드러운 그림자) ─────────────────────────
-  /// 카드/리스트 아이템 (약한 그림자)
-  static const double elevationCard = 1.0;
+  // ─── Neo-Brutalism: 오프셋 쉐도우 (그림자 대신 명확한 오프셋) ─────────
+  /// 카드용 오프셋 박스쉐도우 (6px x 6px 검정)
+  static List<BoxShadow> shadowOffsetBrutalCard(Color color) => [
+    BoxShadow(
+      color: color,
+      offset: const Offset(ConfigUI.shadowOffsetBrutal, ConfigUI.shadowOffsetBrutal),
+      blurRadius: 0,
+      spreadRadius: 0,
+    ),
+  ];
+  /// 드래그 중 카드 (강조)
+  static const double elevationCard = 0;
   /// 바텀시트 상단 등
   static const double elevationSheet = 2.0;
   /// 버튼 눌림 느낌
@@ -43,8 +58,8 @@ class ConfigUI {
   /// 드래그 중 리스트 아이템
   static const double elevationDragProxy = 4.0;
 
-  // ─── 애니메이션 ──────────────────────────────────────────────────────
-  static const int durationShortMs = 150;
+  // ─── 애니메이션 (Neo-Brutalism: 빠르고 즉각적) ─────────────────────────
+  static const int durationShortMs = 200;
   static const int durationMediumMs = 250;
   static const Duration durationShort =
       Duration(milliseconds: durationShortMs);
@@ -66,6 +81,10 @@ class ConfigUI {
   static const double listItemMarginRight = 8.0;
   static const double listItemMarginTop = 6.0;
   static const double listItemMarginBottom = 10.0;
+  /// Neo-Brutalism: 두꺼운 보더 보정 - 컬럼 헤더~카드 간격 (보더 두꺼워져서 간격 확대)
+  static const double gapColumnHeaderToCards = 12.0;
+  /// Neo-Brutalism: 두꺼운 보더 보정 - 카드 간 간격 (보더 두꺼워져서 간격 확대)
+  static const double gapBetweenCards = 12.0;
   /// 시트/다이얼로그 내부 좌우
   static const double sheetPaddingH = 20.0;
   /// 시트 내 버튼 행 높이 (minTouchTarget 이상)

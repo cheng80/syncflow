@@ -196,9 +196,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         counterText: '',
                         filled: true,
                         fillColor: p.cardBackground,
-                        border: OutlineInputBorder(
-                          borderRadius: ConfigUI.inputRadius,
-                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -230,9 +227,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         hintText: context.tr('emailPlaceholder'),
                         filled: true,
                         fillColor: p.cardBackground,
-                        border: OutlineInputBorder(
-                          borderRadius: ConfigUI.inputRadius,
-                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
