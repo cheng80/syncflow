@@ -23,6 +23,12 @@ class BoardHandler {
   Future<BoardDetail> getBoardDetail(String sessionToken, int boardId) =>
       _client.getBoardDetail(sessionToken, boardId);
 
+  Future<BoardItem> updateBoard(String sessionToken, int boardId, {required String title}) =>
+      _client.updateBoard(sessionToken, boardId, title: title);
+
+  Future<void> deleteBoard(String sessionToken, int boardId) =>
+      _client.deleteBoard(sessionToken, boardId);
+
   Future<ColumnItem> createColumn(
     String sessionToken,
     int boardId, {

@@ -10,6 +10,7 @@ import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
+import 'package:syncflow/widget/language_picker_sheet.dart';
 
 /// 로그인 화면
 /// Step 1: 이메일 입력 → 코드 발송
@@ -123,6 +124,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       backgroundColor: p.background,
+      appBar: AppBar(
+        backgroundColor: p.background,
+        scrolledUnderElevation: 0,
+        iconTheme: IconThemeData(color: p.icon),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.language, color: p.icon),
+            onPressed: () => showLanguagePickerSheet(context),
+            tooltip: context.tr('language'),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: KeyboardDismissScrollView(
           padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
@@ -151,7 +164,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 40),
+                  if (!isCodeStep) ...[
+                    const SizedBox(height: 24),
+                    Text(
+                      context.tr('loginIntro'),
+                      style: TextStyle(
+                        color: p.textSecondary,
+                        fontSize: ConfigUI.fontSizeLabel,
+                        height: 1.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
                   if (isCodeStep) ...[
                     Text(
                       context.tr('codeSentHint', namedArgs: {'email': _email!}),

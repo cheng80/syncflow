@@ -12,6 +12,7 @@ import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/view/board_detail_screen.dart';
+import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/vm/board_list_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 
@@ -167,6 +168,19 @@ class BoardListScreen extends ConsumerWidget {
     );
   }
 
+  static Future<void> _createTutorialBoardOnFirstInstall(BuildContext context, WidgetRef ref) async {
+    if (AppStorage.hasTutorialBoardCreated) return;
+    await AppStorage.setTutorialBoardCreated(); // 재진입 방지
+    try {
+      await ref.read(boardListNotifierProvider.notifier).ensureTutorialBoardWithSamples(
+        cardsPerColumn: 1,
+      );
+      await ref.read(boardListNotifierProvider.notifier).refresh();
+    } catch (_) {
+      await AppStorage.resetTutorialBoardCreated(); // 실패 시 플래그 해제 → 재시도 가능
+    }
+  }
+
   static Future<void> _doCreateBoard(
     BuildContext context,
     WidgetRef ref,
@@ -197,6 +211,16 @@ class BoardListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final boardsAsync = ref.watch(boardListNotifierProvider);
+
+    ref.listen(boardListNotifierProvider, (prev, next) {
+      next.whenData((boards) {
+        if (boards.isEmpty &&
+            !AppStorage.hasTutorialBoardCreated &&
+            ref.read(sessionNotifierProvider).value?.sessionToken != null) {
+          _createTutorialBoardOnFirstInstall(context, ref);
+        }
+      });
+    });
 
     return boardsAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),

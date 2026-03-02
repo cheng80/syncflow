@@ -133,6 +133,34 @@ class ApiClient {
     );
   }
 
+  /// PATCH /v1/boards/{id} - 보드 수정 (owner만)
+  Future<BoardItem> updateBoard(String sessionToken, int boardId, {required String title}) async {
+    final res = await http.patch(
+      Uri.parse(_url('/v1/boards/$boardId')),
+      headers: _authHeaders(sessionToken),
+      body: CustomJsonUtil.encode({'title': title}) ?? '',
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '보드 수정 실패');
+    }
+    return BoardItem.fromJson(
+      CustomJsonUtil.decode(res.body) as Map<String, dynamic>,
+    );
+  }
+
+  /// DELETE /v1/boards/{id} - 보드 삭제 (owner만)
+  Future<void> deleteBoard(String sessionToken, int boardId) async {
+    final res = await http.delete(
+      Uri.parse(_url('/v1/boards/$boardId')),
+      headers: _authHeaders(sessionToken),
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '보드 삭제 실패');
+    }
+  }
+
   /// GET /v1/boards/{id} - 보드 상세
   Future<BoardDetail> getBoardDetail(String sessionToken, int boardId) async {
     final res = await http.get(

@@ -5,6 +5,7 @@
 // [참고] habit_app/lib/view/app_drawer.dart
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,7 +15,9 @@ import 'package:syncflow/service/in_app_review_service.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/util/config_ui.dart';
+import 'package:syncflow/util/sheet_util.dart';
 import 'package:syncflow/util/app_storage.dart';
+import 'package:syncflow/vm/board_list_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/vm/theme_notifier.dart';
 import 'package:syncflow/vm/wakelock_notifier.dart';
@@ -45,7 +48,7 @@ class AppDrawer extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildMenuHeader(context, p),
+            _buildMenuHeader(context, ref, p),
             Divider(color: p.divider, height: 1),
             Expanded(
               child: ListView(
@@ -241,25 +244,138 @@ class AppDrawer extends ConsumerWidget {
     );
   }
 
-  Widget _buildMenuHeader(BuildContext context, AppThemeColorsHelper p) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        ConfigUI.screenPaddingH, 24, ConfigUI.screenPaddingH, 16,
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.settings, color: p.icon, size: 28),
-          const SizedBox(width: 12),
-          Text(
-            context.tr('settings'),
-            style: TextStyle(
-              color: p.textPrimary,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
+  Widget _buildMenuHeader(BuildContext context, WidgetRef ref, AppThemeColorsHelper p) {
+    return GestureDetector(
+      onLongPress: kReleaseMode
+          ? null
+          : () {
+              HapticFeedback.mediumImpact();
+              _showSecretMenu(context, ref, p);
+            },
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(
+          ConfigUI.screenPaddingH, 24, ConfigUI.screenPaddingH, 16,
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.settings, color: p.icon, size: 28),
+            const SizedBox(width: 12),
+            Text(
+              context.tr('settings'),
+              style: TextStyle(
+                color: p.textPrimary,
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  void _showSecretMenu(BuildContext context, WidgetRef ref, AppThemeColorsHelper p) {
+    showModalBottomSheet(
+      context: context,
+      shape: defaultSheetShape,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(ConfigUI.sheetPaddingH),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                context.tr('devMenu'),
+                style: TextStyle(
+                  fontSize: ConfigUI.fontSizeSubtitle,
+                  fontWeight: FontWeight.bold,
+                  color: p.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: Icon(Icons.info_outline, color: p.icon),
+                title: Text(context.tr('versionInfo'), style: TextStyle(color: p.textPrimary)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showVersionInfo(context);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.add_task, color: p.icon),
+                title: Text(context.tr('devMenuDummyData'), style: TextStyle(color: p.textPrimary)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _createTestBoardDummyData(context, ref);
+                },
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(context.tr('close')),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _createTestBoardDummyData(BuildContext context, WidgetRef ref) async {
+    final session = ref.read(sessionNotifierProvider).value;
+    if (session?.sessionToken == null) {
+      if (context.mounted) {
+        showCommonSnackBar(context, message: context.tr('sessionExpired'));
+      }
+      return;
+    }
+
+    try {
+      showOverlaySnackBar(context, message: context.tr('devMenuDummyDataCreating'));
+      final board = await ref.read(boardListNotifierProvider.notifier).ensureTutorialBoardWithSamples(
+        cardsPerColumn: 3,
+      );
+      if (board == null) {
+        if (context.mounted) {
+          showCommonSnackBar(context, message: context.tr('devMenuDummyDataFailed'));
+        }
+        return;
+      }
+      await ref.read(boardListNotifierProvider.notifier).refresh();
+      if (context.mounted) {
+        showCommonSnackBar(context, message: context.tr('devMenuDummyDataDone'));
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        showCommonSnackBar(context, message: e.message);
+      }
+    } catch (_) {
+      if (context.mounted) {
+        showCommonSnackBar(context, message: context.tr('devMenuDummyDataFailed'));
+      }
+    }
+  }
+
+  void _showVersionInfo(BuildContext context) {
+    PackageInfo.fromPlatform().then((info) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(context.tr('versionInfo')),
+          content: Text(
+            '${info.appName}\n${info.version}+${info.buildNumber}\n${info.packageName}',
+            style: const TextStyle(fontFamily: 'monospace'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(context.tr('close')),
+            ),
+          ],
+        ),
+      );
+    });
   }
 }

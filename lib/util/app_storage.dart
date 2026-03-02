@@ -12,6 +12,16 @@ class AppStorage {
   // ─── 세션 ─────────────────────────────────────
   // 세션은 SessionSecureStorage 사용 (lib/util/session_secure_storage.dart)
 
+  // ─── 재설치 감지 (iOS Keychain은 앱 삭제 후에도 유지됨) ─────────────────
+  static const String _keyAppHasLaunched = 'app_has_launched';
+
+  /// 앱이 한 번이라도 실행된 적 있는지 (GetStorage는 앱 삭제 시 삭제됨)
+  static bool get hasAppLaunchedBefore =>
+      _storage.read<bool>(_keyAppHasLaunched) ?? false;
+
+  static Future<void> setAppHasLaunched() =>
+      _storage.write(_keyAppHasLaunched, true);
+
   // ─── 테마 ─────────────────────────────────────
   static const String _keyTheme = 'theme_mode';
 
@@ -66,4 +76,18 @@ class AppStorage {
   /// 튜토리얼 완료 초기화 (다시 보기용)
   static Future<void> resetTutorialCompleted() =>
       _storage.write(_keyTutorialCompleted, false);
+
+  // ─── 튜토리얼 보드 (최초 설치 시 자동 생성) ─────────────────
+  static const String _keyTutorialBoardCreated = 'tutorial_board_created';
+
+  /// 튜토리얼 보드 생성 여부 (최초 1회 생성 후 true)
+  static bool get hasTutorialBoardCreated =>
+      _storage.read<bool>(_keyTutorialBoardCreated) ?? false;
+
+  static Future<void> setTutorialBoardCreated() =>
+      _storage.write(_keyTutorialBoardCreated, true);
+
+  /// 실패 시 재시도용
+  static Future<void> resetTutorialBoardCreated() =>
+      _storage.write(_keyTutorialBoardCreated, false);
 }

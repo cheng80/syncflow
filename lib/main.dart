@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:syncflow/util/app_locale.dart';
 import 'package:syncflow/util/app_storage.dart';
+import 'package:syncflow/util/session_secure_storage.dart';
 import 'package:syncflow/view/auth/login_screen.dart';
 import 'package:syncflow/view/main_scaffold.dart';
 import 'package:syncflow/vm/session_notifier.dart';
@@ -50,6 +51,13 @@ Future<void> _main() async {
   await _initDateFormats();
 
   await GetStorage.init();
+
+  // iOS: Keychain은 앱 삭제 후에도 유지됨. GetStorage는 삭제됨.
+  // hasAppLaunchedBefore 없음 = 재설치 → Secure Storage(세션) 초기화 → Android/iOS 동작 일치
+  if (!AppStorage.hasAppLaunchedBefore) {
+    await SessionSecureStorage.clearSession();
+    await AppStorage.setAppHasLaunched();
+  }
 
   // 첫 실행일 저장 (인앱 리뷰 조건용)
   if (AppStorage.getFirstLaunchDate() == null) {

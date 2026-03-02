@@ -4,6 +4,8 @@ SyncFlow 보드 API
 """
 
 import secrets
+
+from app.ws.room import broadcast_to_board
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -357,6 +359,83 @@ async def delete_column(
                 "fallback_column_id": fallback_id,
                 "moved_card_count": moved_count,
             }
+    finally:
+        conn.close()
+
+
+class UpdateBoardRequest(BaseModel):
+    title: str | None = None
+
+
+@router.patch("/{board_id}")
+async def update_board(
+    board_id: int,
+    req: UpdateBoardRequest,
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    보드 수정 (owner만) - 제목 변경
+    """
+    if req.title is None or not req.title.strip():
+        raise HTTPException(status_code=400, detail="제목을 입력하세요.")
+
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+            _check_board_owner(cursor, board_id, user_id)
+
+            cursor.execute(
+                "SELECT owner_id FROM boards WHERE id = %s",
+                (board_id,),
+            )
+            row = cursor.fetchone()
+            owner_id = row[0] if row else user_id
+
+            cursor.execute(
+                "UPDATE boards SET title = %s, updated_at = UTC_TIMESTAMP() WHERE id = %s",
+                (req.title.strip(), board_id),
+            )
+            conn.commit()
+            return {"id": board_id, "title": req.title.strip(), "owner_id": owner_id}
+    finally:
+        conn.close()
+
+
+@router.delete("/{board_id}")
+async def delete_board(
+    board_id: int,
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    보드 삭제 (owner만)
+    """
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+            _check_board_owner(cursor, board_id, user_id)
+
+            cursor.execute("DELETE FROM boards WHERE id = %s", (board_id,))
+            conn.commit()
+
+            # 참여 중인 멤버에게 BOARD_DELETED 브로드캐스트
+            await broadcast_to_board(
+                board_id,
+                {"type": "BOARD_DELETED", "data": {"board_id": board_id}},
+            )
+
+            return {"ok": True}
     finally:
         conn.close()
 

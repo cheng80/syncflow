@@ -24,9 +24,10 @@ import 'package:syncflow/widget/markdown_help_dialog.dart';
 import 'package:syncflow/widget/card_tile.dart';
 import 'package:syncflow/widget/move_card_sheet.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
+import 'package:syncflow/vm/board_list_notifier.dart';
 
 /// 보드 상세 화면
-class BoardDetailScreen extends ConsumerWidget {
+class BoardDetailScreen extends ConsumerStatefulWidget {
   const BoardDetailScreen({
     super.key,
     required this.boardId,
@@ -39,12 +40,33 @@ class BoardDetailScreen extends ConsumerWidget {
   final int? ownerId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final detailAsync = ref.watch(boardDetailProvider(boardId));
-    final cachedDetail = ref.watch(boardDetailCacheProvider(boardId));
+  ConsumerState<BoardDetailScreen> createState() => _BoardDetailScreenState();
+}
+
+class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
+  late String _title;
+
+  @override
+  void initState() {
+    super.initState();
+    _title = widget.title;
+  }
+
+  @override
+  void didUpdateWidget(covariant BoardDetailScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.title != widget.title) {
+      _title = widget.title;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final detailAsync = ref.watch(boardDetailProvider(widget.boardId));
+    final cachedDetail = ref.watch(boardDetailCacheProvider(widget.boardId));
     final session = ref.watch(sessionNotifierProvider).value;
     final detail = cachedDetail ?? detailAsync.value;
-    final resolvedOwnerId = ownerId ?? detail?.ownerId;
+    final resolvedOwnerId = widget.ownerId ?? detail?.ownerId;
     final isOwner = resolvedOwnerId != null && session?.userId == resolvedOwnerId;
 
     return Scaffold(
@@ -57,15 +79,20 @@ class BoardDetailScreen extends ConsumerWidget {
           onPressed: () => CustomNavigationUtil.back(context),
         ),
         title: Text(
-          title,
+          _title,
           style: TextStyle(
             color: context.appTheme.textPrimary,
             fontSize: ConfigUI.fontSizeAppBar,
           ),
         ),
         actions: [
-          if (isOwner) _InviteButton(boardId: boardId),
-          _PresenceAvatarsButton(boardId: boardId),
+          if (isOwner) _BoardMenuButton(
+            boardId: widget.boardId,
+            currentTitle: _title,
+            onTitleChanged: (newTitle) => setState(() => _title = newTitle),
+          ),
+          if (isOwner) _InviteButton(boardId: widget.boardId),
+          _PresenceAvatarsButton(boardId: widget.boardId),
           const _WsConnectionIndicator(),
         ],
       ),
@@ -74,13 +101,13 @@ class BoardDetailScreen extends ConsumerWidget {
           final prev = detail;
           if (prev != null && prev.columns.isNotEmpty) {
             return _BoardWsBridge(
-              boardId: boardId,
+              boardId: widget.boardId,
               child: _BoardColumnsView(
                 detail: prev,
-                boardId: boardId,
+                boardId: widget.boardId,
                 isOwner: isOwner,
-                onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
-                optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
+                onRefresh: () => ref.invalidate(boardDetailProvider(widget.boardId)),
+                optimisticMoves: ref.watch(optimisticCardMovesProvider(widget.boardId)),
               ),
             );
           }
@@ -93,7 +120,7 @@ class BoardDetailScreen extends ConsumerWidget {
               Text('${context.tr('error')}: $e', style: TextStyle(color: context.appTheme.accent)),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: () => ref.invalidate(boardDetailProvider(boardId)),
+                onPressed: () => ref.invalidate(boardDetailProvider(widget.boardId)),
                 child: Text(context.tr('retry')),
               ),
             ],
@@ -105,13 +132,13 @@ class BoardDetailScreen extends ConsumerWidget {
             return Center(child: Text(context.tr('boardLoadFailed')));
           }
           return _BoardWsBridge(
-            boardId: boardId,
+            boardId: widget.boardId,
             child: _BoardColumnsView(
               detail: effective,
-              boardId: boardId,
+              boardId: widget.boardId,
               isOwner: isOwner,
-              onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
-              optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
+              onRefresh: () => ref.invalidate(boardDetailProvider(widget.boardId)),
+              optimisticMoves: ref.watch(optimisticCardMovesProvider(widget.boardId)),
             ),
           );
         },
@@ -324,6 +351,19 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
     }
     if (type == 'PRESENCE_LEFT' && data != null) {
       _applyPresenceLeft(data);
+      return;
+    }
+    if (type == 'BOARD_DELETED' && data != null) {
+      final bid = (data['board_id'] as num?)?.toInt();
+      if (bid == widget.boardId && mounted) {
+        ref.read(boardListNotifierProvider.notifier).refresh();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(context.tr('boardDeletedByOwner'))),
+          );
+          CustomNavigationUtil.back(context);
+        }
+      }
       return;
     }
     if (type == 'CARD_LOCKED' && data != null) {
@@ -1042,6 +1082,112 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 보드 메뉴 (이름 수정, 삭제) - owner만 표시
+class _BoardMenuButton extends ConsumerWidget {
+  const _BoardMenuButton({
+    required this.boardId,
+    required this.currentTitle,
+    required this.onTitleChanged,
+  });
+
+  final int boardId;
+  final String currentTitle;
+  final void Function(String) onTitleChanged;
+
+  Future<void> _renameBoard(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController(text: currentTitle);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('boardRename')),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            hintText: context.tr('boardTitle'),
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => CustomNavigationUtil.back(ctx),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            onPressed: () => CustomNavigationUtil.back(ctx, result: controller.text.trim()),
+            child: Text(context.tr('save')),
+          ),
+        ],
+      ),
+    );
+    if (newTitle == null || newTitle.isEmpty) return;
+
+    try {
+      await ref.read(boardListNotifierProvider.notifier).updateBoard(boardId, newTitle);
+      ref.invalidate(boardDetailProvider(boardId));
+      if (context.mounted) {
+        onTitleChanged(newTitle);
+      }
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  Future<void> _deleteBoard(BuildContext context, WidgetRef ref) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(context.tr('boardDelete')),
+        content: Text(context.tr('boardDeleteConfirm')),
+        actions: [
+          TextButton(
+            onPressed: () => CustomNavigationUtil.back(ctx, result: false),
+            child: Text(context.tr('cancel')),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => CustomNavigationUtil.back(ctx, result: true),
+            child: Text(context.tr('delete')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await ref.read(boardListNotifierProvider.notifier).deleteBoard(boardId);
+      // BOARD_DELETED WebSocket 브로드캐스트로 _BoardWsBridge에서 back() 처리됨
+    } on ApiException catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.more_vert, color: context.appTheme.icon),
+      onSelected: (value) {
+        if (value == 'rename') {
+          _renameBoard(context, ref);
+        } else if (value == 'delete') {
+          _deleteBoard(context, ref);
+        }
+      },
+      itemBuilder: (context) => [
+        PopupMenuItem(value: 'rename', child: Text(context.tr('boardRename'))),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text(context.tr('boardDelete'), style: TextStyle(color: context.appTheme.accent)),
+        ),
+      ],
     );
   }
 }
