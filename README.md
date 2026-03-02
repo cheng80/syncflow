@@ -39,7 +39,7 @@
 | 상태 관리 | Riverpod 3.0+ | Provider/Notifier 직접 구현 (코드 제너레이터 미사용) |
 | 백엔드 | FastAPI | REST API, WebSocket |
 | DB | MySQL | users, sessions, boards, columns, cards |
-| 설정 | GetStorage | 세션 토큰, 테마 등 |
+| 설정 | GetStorage, FlutterSecureStorage | 테마 등(GetStorage), 세션 토큰(Secure Storage) |
 | UI | Neo-Brutalism | 강한 대비, 두꺼운 보더, 오프셋 쉐도우 |
 
 ---
@@ -99,3 +99,25 @@ flutter run
 ```
 
 **우선 기기**: iOS 시뮬레이터 (Debug 모드)
+
+---
+
+## WebSocket 연결 오류 (프록시/리버스 프록시)
+
+`WebSocketException: Connection was not upgraded to websocket` 발생 시:
+
+- **원인**: nginx, QNAP myqnapcloud 등 리버스 프록시가 WebSocket 업그레이드를 거부
+- **해결**: 프록시에 WebSocket 업그레이드 설정 추가
+
+**nginx 예시**:
+```nginx
+location /ws {
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_pass http://127.0.0.1:8000;
+}
+```
+
+- **임시**: WebSocket 실패 시 앱은 REST만으로 동작 (실시간 동기화 미지원)

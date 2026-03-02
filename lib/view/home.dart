@@ -27,7 +27,7 @@ class Home extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            '간편 단체 주문서 앱',
+            '실시간 경량 협업 칸반 보드',
             style: TextStyle(
               fontSize: 14,
               color: p.textSecondary,

@@ -7,9 +7,6 @@ import 'package:syncflow/util/app_storage.dart';
 
 /// 인앱 리뷰 요청 조건
 class InAppReviewConfig {
-  /// 습관 N회 달성 후 요청 (목표 달성 시 +1)
-  static const int minHabitAchievedCount = 5;
-
   /// 앱 사용 N일 후 요청 (첫 실행일 기준)
   static const int minDaysSinceFirstLaunch = 3;
 }
@@ -19,7 +16,7 @@ class InAppReviewService {
   final InAppReview _review = InAppReview.instance;
 
   /// 조건 만족 시 인앱 리뷰 팝업 요청 (자동 호출용)
-  /// - 습관 달성 5회 이상 또는 첫 실행 후 3일 경과
+  /// - 첫 실행 후 3일 경과
   /// - 이미 요청했으면 스킵
   Future<void> maybeRequestReview() async {
     if (AppStorage.getReviewRequested()) return;
@@ -27,15 +24,11 @@ class InAppReviewService {
     final firstLaunch = AppStorage.getFirstLaunchDate();
     if (firstLaunch == null) return;
 
-    final count = AppStorage.getHabitAchievedCount();
     final firstDate = DateTime.tryParse(firstLaunch);
     if (firstDate == null) return;
 
     final daysSince = DateTime.now().difference(firstDate).inDays;
-    final countOk = count >= InAppReviewConfig.minHabitAchievedCount;
-    final daysOk = daysSince >= InAppReviewConfig.minDaysSinceFirstLaunch;
-
-    if (!countOk && !daysOk) return;
+    if (daysSince < InAppReviewConfig.minDaysSinceFirstLaunch) return;
 
     if (await _review.isAvailable()) {
       await _review.requestReview();

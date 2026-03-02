@@ -1,0 +1,1247 @@
+// board_detail_screen.dart
+// 보드 상세 (PageView 1컬럼, 세로 스크롤)
+
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import 'package:syncflow/model/board.dart';
+import 'package:syncflow/navigation/custom_navigation_util.dart';
+import 'package:syncflow/theme/app_theme_colors.dart';
+import 'package:syncflow/vm/card_handler.dart';
+import 'package:syncflow/util/config_ui.dart';
+import 'package:syncflow/vm/board_detail_notifier.dart';
+import 'package:syncflow/service/api_client.dart';
+import 'package:syncflow/vm/session_notifier.dart';
+import 'package:syncflow/vm/ws_service_notifier.dart';
+import 'package:syncflow/vm/board_handler.dart';
+import 'package:syncflow/widget/card_detail_modal.dart';
+import 'package:syncflow/widget/card_tile.dart';
+import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
+
+/// 보드 상세 화면
+class BoardDetailScreen extends ConsumerWidget {
+  const BoardDetailScreen({
+    super.key,
+    required this.boardId,
+    required this.title,
+    this.ownerId,
+  });
+
+  final int boardId;
+  final String title;
+  final int? ownerId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final detailAsync = ref.watch(boardDetailProvider(boardId));
+    final cachedDetail = ref.watch(boardDetailCacheProvider(boardId));
+    final session = ref.watch(sessionNotifierProvider).value;
+    final detail = cachedDetail ?? detailAsync.value;
+    final resolvedOwnerId = ownerId ?? detail?.ownerId;
+    final isOwner = resolvedOwnerId != null && session?.userId == resolvedOwnerId;
+
+    return Scaffold(
+      backgroundColor: context.appTheme.background,
+      appBar: AppBar(
+        backgroundColor: context.appTheme.background,
+        scrolledUnderElevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => CustomNavigationUtil.back(context),
+        ),
+        title: Text(
+          title,
+          style: TextStyle(
+            color: context.appTheme.textPrimary,
+            fontSize: ConfigUI.fontSizeAppBar,
+          ),
+        ),
+        actions: [
+          if (isOwner) _InviteButton(boardId: boardId),
+          const _WsConnectionIndicator(),
+        ],
+      ),
+      body: detailAsync.when(
+        loading: () {
+          final prev = detail;
+          if (prev != null && prev.columns.isNotEmpty) {
+            return _BoardWsBridge(
+              boardId: boardId,
+              child: _BoardColumnsView(
+                detail: prev,
+                boardId: boardId,
+                onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
+                optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
+              ),
+            );
+          }
+          return const Center(child: CircularProgressIndicator());
+        },
+        error: (e, st) => Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('오류: $e', style: TextStyle(color: context.appTheme.accent)),
+              const SizedBox(height: 16),
+              FilledButton(
+                onPressed: () => ref.invalidate(boardDetailProvider(boardId)),
+                child: const Text('다시 시도'),
+              ),
+            ],
+          ),
+        ),
+        data: (detail) {
+          final effective = cachedDetail ?? detail;
+          if (effective == null || effective.columns.isEmpty) {
+            return const Center(child: Text('보드를 불러올 수 없습니다.'));
+          }
+          return _BoardWsBridge(
+            boardId: boardId,
+            child: _BoardColumnsView(
+              detail: effective,
+              boardId: boardId,
+              onRefresh: () => ref.invalidate(boardDetailProvider(boardId)),
+              optimisticMoves: ref.watch(optimisticCardMovesProvider(boardId)),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// 컬럼 탭 + PageView (앞/뒤 컬럼 표시)
+class _BoardColumnsView extends StatefulWidget {
+  const _BoardColumnsView({
+    required this.detail,
+    required this.boardId,
+    required this.onRefresh,
+    this.optimisticMoves = const <int, OptimisticCardMove>{},
+  });
+
+  final BoardDetail detail;
+  final int boardId;
+  final VoidCallback onRefresh;
+  final Map<int, OptimisticCardMove> optimisticMoves;
+
+  @override
+  State<_BoardColumnsView> createState() => _BoardColumnsViewState();
+}
+
+class _BoardColumnsViewState extends State<_BoardColumnsView> {
+  late final PageController _pageController;
+  int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final columns = widget.detail.columns;
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: ConfigUI.screenPaddingH,
+            vertical: 8,
+          ),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: List.generate(columns.length, (index) {
+                return _ColumnTab(
+                  label: columns[index].title,
+                  isSelected: _currentIndex == index,
+                  onTap: () => _pageController.animateToPage(
+                    index,
+                    duration: ConfigUI.durationMedium,
+                    curve: Curves.easeInOut,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: columns.length,
+            onPageChanged: (i) => setState(() => _currentIndex = i),
+            itemBuilder: (context, index) {
+              final col = columns[index];
+              final merged = mergeCardsWithOptimistic(
+                widget.detail.cards,
+                widget.optimisticMoves,
+              );
+              final cards = merged
+                  .where((c) => c.columnId == col.id)
+                  .toList()
+                ..sort((a, b) => a.position.compareTo(b.position));
+              final cardsKey = cards.map((c) => '${c.id}:${c.position}').join(',');
+              return _ColumnView(
+                key: ValueKey('col_${col.id}_$cardsKey'),
+                column: col,
+                cards: cards,
+                boardId: widget.boardId,
+                onRefresh: widget.onRefresh,
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ColumnTab extends StatelessWidget {
+  const _ColumnTab({
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: ConfigUI.durationShort,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected
+                ? p.primary.withValues(alpha: 0.2)
+                : p.cardBackground,
+            borderRadius: ConfigUI.chipRadius,
+            border: Border.all(
+              color: isSelected ? p.primary : p.textSecondary.withValues(alpha: 0.3),
+              width: isSelected ? 2 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              color: isSelected ? p.primary : p.textSecondary,
+              fontSize: ConfigUI.fontSizeLabel,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 보드 진입 시 JOIN_BOARD, 이탈 시 LEAVE_BOARD
+class _BoardWsBridge extends ConsumerStatefulWidget {
+  const _BoardWsBridge({required this.boardId, required this.child});
+
+  final int boardId;
+  final Widget child;
+
+  @override
+  ConsumerState<_BoardWsBridge> createState() => _BoardWsBridgeState();
+}
+
+class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
+  late final _wsService = ref.read(wsServiceProvider);
+  StreamSubscription<Map<String, dynamic>>? _msgSub;
+  StreamSubscription<bool>? _connSub;
+  bool _needsRejoin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _wsService; // initState에서 초기화 (ref 유효 시점)
+    joinBoardRoom(ref, widget.boardId);
+    _msgSub = _wsService.messages.listen(_onWsMessage);
+    _connSub = _wsService.connectionState.listen((connected) async {
+      if (!mounted) return;
+      if (!connected) {
+        _needsRejoin = true;
+        return;
+      }
+      if (_needsRejoin) {
+        _needsRejoin = false;
+        await _wsService.joinBoard(widget.boardId);
+        if (mounted) {
+          ref.invalidate(boardDetailProvider(widget.boardId));
+        }
+      }
+    });
+  }
+
+  void _onWsMessage(Map<String, dynamic> msg) {
+    final type = msg['type'] as String?;
+    final data = msg['data'] as Map<String, dynamic>?;
+    if (type == 'ERROR') {
+      final reqId = msg['req_id'] as String?;
+      final message = (data?['message'] as String?) ?? '실시간 동기화 오류';
+      if (reqId != null) {
+        final pendingReqIds = Set<String>.from(
+          ref.read(pendingMoveReqIdsProvider(widget.boardId)),
+        )..remove(reqId);
+        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = pendingReqIds;
+
+        final retryMap = Map<String, int>.from(
+          ref.read(pendingMoveRetryCountProvider(widget.boardId)),
+        )..remove(reqId);
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
+      return;
+    }
+
+    if (data == null) return;
+    final bid = data['board_id'];
+    if (bid != widget.boardId) return;
+    final incomingVersion = (data['board_version'] as num?)?.toInt();
+    final currentVersion = ref.read(boardVersionProvider(widget.boardId));
+    if (incomingVersion != null && currentVersion != null && incomingVersion < currentVersion) {
+      debugPrint('[동기화] 구버전 이벤트 무시: incoming=$incomingVersion current=$currentVersion type=$type');
+      return;
+    }
+    if (incomingVersion != null &&
+        (currentVersion == null || incomingVersion > currentVersion)) {
+      ref.read(boardVersionProvider(widget.boardId).notifier).state = incomingVersion;
+    }
+
+    const cardTypes = [
+      'CARD_CREATED', 'CARD_MOVED', 'CARD_UPDATED',
+      'CARD_ARCHIVED', 'CARD_RESTORED',
+    ];
+    if (cardTypes.contains(type)) {
+      final reqId = msg['req_id'] as String?;
+      final pendingReqIds = ref.read(pendingMoveReqIdsProvider(widget.boardId));
+      final isAckForMyMove = type == 'CARD_MOVED' && reqId != null && pendingReqIds.contains(reqId);
+
+      if (isAckForMyMove) {
+        final nextPending = Set<String>.from(pendingReqIds)..remove(reqId);
+        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = nextPending;
+        final retryMap = Map<String, int>.from(
+          ref.read(pendingMoveRetryCountProvider(widget.boardId)),
+        )..remove(reqId);
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+        _applyCardMoved(data);
+        return;
+      }
+
+      if (type == 'CARD_MOVED') {
+        _applyCardMoved(data);
+        return;
+      }
+
+      if (type == 'CARD_CREATED') {
+        _applyCardCreated(data);
+        return;
+      }
+      if (type == 'CARD_UPDATED') {
+        _applyCardUpdated(data);
+        return;
+      }
+      if (type == 'CARD_ARCHIVED') {
+        _applyCardArchived(data);
+        return;
+      }
+      if (type == 'CARD_RESTORED') {
+        ref.invalidate(boardDetailProvider(widget.boardId));
+        return;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(boardDetailProvider(widget.boardId), (prev, next) {
+      if (!next.isLoading && next.value != null) {
+        final detail = next.value!;
+        // build 단계 중 provider state 변경을 피하기 위해 프레임 이후 반영
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          final pendingReqIds = ref.read(pendingMoveReqIdsProvider(widget.boardId));
+          if (pendingReqIds.isNotEmpty) {
+            // 아직 ACK 대기 중인 이동이 있으면 낙관적 상태 유지
+            return;
+          }
+          ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = detail;
+          ref.read(boardVersionProvider(widget.boardId).notifier).state = detail.boardVersion;
+          final hadMoves = ref.read(optimisticCardMovesProvider(widget.boardId)).isNotEmpty;
+          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = {};
+          if (hadMoves) {
+            for (final col in detail.columns) {
+              final colCards = detail.cards.where((c) => c.columnId == col.id).toList()
+                ..sort((a, b) => a.position.compareTo(b.position));
+              final cardsStr = colCards.map((c) => 'id:${c.id}:pos:${c.position}').join(', ');
+              debugPrint('[카드이동] 서버 데이터 수신 → 낙관적 초기화 | columnId=${col.id} cards=$cardsStr');
+            }
+          }
+        });
+      }
+    });
+    return widget.child;
+  }
+
+  void _applyCardCreated(Map<String, dynamic> data) {
+    final cardJson = data['card'] as Map<String, dynamic>?;
+    if (cardJson == null) return;
+
+    final incoming = CardItem.fromJson(cardJson);
+    final current = ref.read(boardDetailCacheProvider(widget.boardId));
+    if (current == null) {
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      return;
+    }
+
+    final nextCards = current.cards.where((c) => c.id != incoming.id).toList()..add(incoming);
+    nextCards.sort((a, b) {
+      final byColumn = a.columnId.compareTo(b.columnId);
+      if (byColumn != 0) return byColumn;
+      return a.position.compareTo(b.position);
+    });
+
+    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+      id: current.id,
+      title: current.title,
+      ownerId: current.ownerId,
+      columns: current.columns,
+      cards: nextCards,
+      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+    );
+  }
+
+  void _applyCardMoved(Map<String, dynamic> data) {
+    final cardId = data['card_id'] as int?;
+    final columnId = data['column_id'] as int?;
+    final position = data['position'] as int?;
+    if (cardId == null || columnId == null || position == null) return;
+
+    final current = ref.read(boardDetailCacheProvider(widget.boardId));
+    if (current == null) {
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      return;
+    }
+
+    final order = (data['column_cards'] as List?)
+        ?.whereType<Map>()
+        .map((e) => {
+              'id': e['id'] as int?,
+              'position': e['position'] as int?,
+            })
+        .where((e) => e['id'] != null && e['position'] != null)
+        .toList();
+
+    final positionMap = <int, int>{};
+    if (order != null) {
+      for (final item in order) {
+        positionMap[item['id']!] = item['position']!;
+      }
+    }
+
+    final nextCards = current.cards.map((c) {
+      if (c.id == cardId) {
+        return c.copyWith(
+          columnId: columnId,
+          position: position,
+        );
+      }
+      final normalized = positionMap[c.id];
+      if (normalized != null && c.columnId == columnId) {
+        return c.copyWith(position: normalized);
+      }
+      return c;
+    }).toList();
+
+    nextCards.sort((a, b) {
+      final byColumn = a.columnId.compareTo(b.columnId);
+      if (byColumn != 0) return byColumn;
+      return a.position.compareTo(b.position);
+    });
+
+    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+      id: current.id,
+      title: current.title,
+      ownerId: current.ownerId,
+      columns: current.columns,
+      cards: nextCards,
+      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+    );
+  }
+
+  void _applyCardUpdated(Map<String, dynamic> data) {
+    final cardId = data['card_id'] as int?;
+    final patch = data['patch'] as Map<String, dynamic>?;
+    if (cardId == null || patch == null) return;
+
+    final current = ref.read(boardDetailCacheProvider(widget.boardId));
+    if (current == null) {
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      return;
+    }
+
+    final nextCards = current.cards.map((c) {
+      if (c.id != cardId) return c;
+      return c.copyWith(
+        title: patch.containsKey('title') ? (patch['title'] as String?) : null,
+        description: patch.containsKey('description') ? (patch['description'] as String?) : null,
+        priority: patch.containsKey('priority') ? (patch['priority'] as String?) : null,
+        columnId: patch.containsKey('column_id') ? (patch['column_id'] as int?) : null,
+        position: patch.containsKey('position') ? (patch['position'] as int?) : null,
+        status: patch.containsKey('status') ? (patch['status'] as String?) : null,
+      );
+    }).toList();
+
+    nextCards.sort((a, b) {
+      final byColumn = a.columnId.compareTo(b.columnId);
+      if (byColumn != 0) return byColumn;
+      return a.position.compareTo(b.position);
+    });
+
+    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+      id: current.id,
+      title: current.title,
+      ownerId: current.ownerId,
+      columns: current.columns,
+      cards: nextCards,
+      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+    );
+  }
+
+  void _applyCardArchived(Map<String, dynamic> data) {
+    final cardId = data['card_id'] as int?;
+    if (cardId == null) return;
+    final current = ref.read(boardDetailCacheProvider(widget.boardId));
+    if (current == null) {
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      return;
+    }
+
+    final nextCards = current.cards.where((c) => c.id != cardId).toList();
+    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+      id: current.id,
+      title: current.title,
+      ownerId: current.ownerId,
+      columns: current.columns,
+      cards: nextCards,
+      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+    );
+  }
+
+  @override
+  void dispose() {
+    _msgSub?.cancel();
+    _connSub?.cancel();
+    _wsService.leaveBoard(widget.boardId);
+    super.dispose();
+  }
+}
+
+/// 초대 코드 생성 및 공유 버튼 (owner만 표시)
+class _InviteButton extends ConsumerStatefulWidget {
+  const _InviteButton({required this.boardId});
+
+  final int boardId;
+
+  @override
+  ConsumerState<_InviteButton> createState() => _InviteButtonState();
+}
+
+class _InviteButtonState extends ConsumerState<_InviteButton> {
+  bool _loading = false;
+
+  Future<void> _showInviteSheet() async {
+    final session = ref.read(sessionNotifierProvider).value;
+    final token = session?.sessionToken;
+    if (token == null) return;
+
+    setState(() => _loading = true);
+    try {
+      final invite = await ref.read(boardHandlerProvider).createInvite(token, widget.boardId);
+      if (!mounted) return;
+      _loading = false;
+      setState(() {});
+
+      showModalBottomSheet(
+        context: context,
+        builder: (ctx) => _InviteCodeSheet(
+          code: invite.code,
+          expiresAt: invite.expiresAt,
+        ),
+      );
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: _loading
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.person_add),
+      onPressed: _loading ? null : _showInviteSheet,
+      tooltip: '멤버 초대',
+    );
+  }
+}
+
+class _InviteCodeSheet extends StatelessWidget {
+  const _InviteCodeSheet({required this.code, required this.expiresAt});
+
+  final String code;
+  final String expiresAt;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+    return Padding(
+      padding: const EdgeInsets.all(ConfigUI.sheetPaddingH),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '멤버 초대',
+            style: TextStyle(
+              fontSize: ConfigUI.fontSizeSubtitle,
+              fontWeight: FontWeight.bold,
+              color: p.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '아래 코드를 팀원에게 공유하세요',
+            style: TextStyle(fontSize: ConfigUI.fontSizeBody, color: p.textSecondary),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+            decoration: BoxDecoration(
+              color: p.cardBackground,
+              borderRadius: ConfigUI.cardRadius,
+              border: Border.all(color: p.divider),
+            ),
+            child: Center(
+              child: Text(
+                code,
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 4,
+                  color: p.primary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('초대 코드가 복사되었습니다')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy, size: 18),
+                  label: const Text('복사'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: code));
+                    CustomNavigationUtil.back(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('초대 코드가 복사되었습니다')),
+                    );
+                  },
+                  icon: const Icon(Icons.share, size: 18),
+                  label: const Text('복사 후 닫기'),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// WebSocket 연결 상태 표시 (초록=연결됨, 회색=끊김)
+class _WsConnectionIndicator extends ConsumerWidget {
+  const _WsConnectionIndicator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(wsConnectionStateProvider);
+    return state.when(
+      loading: () => _dot(context, false),
+      error: (_, __) => _dot(context, false),
+      data: (connected) => Tooltip(
+        message: connected ? '실시간 동기화 연결됨' : '실시간 동기화 끊김',
+        child: Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: _dot(context, connected),
+        ),
+      ),
+    );
+  }
+
+  Widget _dot(BuildContext context, bool connected) {
+    return Container(
+      width: 10,
+      height: 10,
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: connected ? Colors.green : Colors.grey,
+        boxShadow: [
+          BoxShadow(
+            color: (connected ? Colors.green : Colors.grey).withValues(alpha: 0.5),
+            blurRadius: 4,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ColumnView extends ConsumerStatefulWidget {
+  const _ColumnView({
+    super.key,
+    required this.column,
+    required this.cards,
+    required this.boardId,
+    required this.onRefresh,
+  });
+
+  final ColumnItem column;
+  final List<CardItem> cards;
+  final int boardId;
+  final VoidCallback onRefresh;
+
+  @override
+  ConsumerState<_ColumnView> createState() => _ColumnViewState();
+}
+
+class _ColumnViewState extends ConsumerState<_ColumnView> {
+  late List<CardItem> _displayCards;
+  static const Duration _moveAckTimeout = Duration(seconds: 2);
+
+  @override
+  void initState() {
+    super.initState();
+    _displayCards = List.from(widget.cards);
+  }
+
+  @override
+  void didUpdateWidget(_ColumnView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!_listEquals(widget.cards, oldWidget.cards)) {
+      _displayCards = List.from(widget.cards);
+    }
+  }
+
+  bool _listEquals(List<CardItem> a, List<CardItem> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].id != b[i].id ||
+          a[i].position != b[i].position ||
+          a[i].columnId != b[i].columnId ||
+          a[i].title != b[i].title ||
+          a[i].description != b[i].description ||
+          a[i].priority != b[i].priority ||
+          a[i].status != b[i].status) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  void _showAddCardDialog() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => _AddCardSheet(
+        columnId: widget.column.id,
+        boardId: widget.boardId,
+        onSaved: () => CustomNavigationUtil.back(ctx),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: ConfigUI.screenPaddingH,
+            vertical: 12,
+          ),
+          child: Row(
+            children: [
+              Text(
+                widget.column.title,
+                style: TextStyle(
+                  fontSize: ConfigUI.fontSizeSubtitle,
+                  fontWeight: FontWeight.bold,
+                  color: p.textPrimary,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: _showAddCardDialog,
+                tooltip: '카드 추가',
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ReorderableListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
+            itemCount: _displayCards.length + 1,
+            onReorder: (oldIndex, newIndex) => _onReorder(oldIndex, newIndex),
+            proxyDecorator: (child, index, animation) => Material(
+              elevation: ConfigUI.elevationDragProxy,
+              borderRadius: ConfigUI.cardRadius,
+              child: child,
+            ),
+            buildDefaultDragHandles: true,
+            itemBuilder: (context, index) {
+              if (index == _displayCards.length) {
+                return Padding(
+                  key: const ValueKey('add-button'),
+                  padding: const EdgeInsets.only(bottom: 24),
+                  child: OutlinedButton.icon(
+                    onPressed: _showAddCardDialog,
+                    icon: const Icon(Icons.add, size: 20),
+                    label: const Text('카드 추가'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                );
+              }
+              final card = _displayCards[index];
+              return Padding(
+                key: ValueKey(card.id),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: CardTile(
+                  card: card,
+                  onTap: () => _showCardDetail(card),
+                  onRefresh: widget.onRefresh,
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    final session = ref.read(sessionNotifierProvider).value;
+    final userId = session?.userId ?? -1;
+
+    if (oldIndex >= _displayCards.length) {
+      debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(범위초과, cards=${_displayCards.length})');
+      return;
+    }
+    if (newIndex > _displayCards.length) {
+      newIndex = _displayCards.length;
+    }
+    if (oldIndex == newIndex) {
+      debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(동일위치)');
+      return;
+    }
+    if (newIndex > oldIndex) newIndex--;
+
+    final movedCard = _displayCards.removeAt(oldIndex);
+    _displayCards.insert(newIndex, movedCard);
+    final neighbor = _computeNeighborIds(_displayCards, newIndex);
+
+    // 서버 전송용 position은 중복되지 않게 계산해야 한다.
+    // (동일 position 전송 시 서버 정렬(position,id)에서 원위치될 수 있음)
+    final requestPosition = _computeRequestPosition(_displayCards, newIndex);
+
+    // 서버 재정렬 규칙과 동일하게 로컬도 즉시 정규화
+    final normalized = List.generate(
+      _displayCards.length,
+      (i) => _displayCards[i].copyWith(position: i * 1000),
+    );
+    _displayCards = normalized;
+    setState(() {}); // 즉시 UI 반영
+    final newPosition = requestPosition;
+    final affectedCardIds = normalized.map((c) => c.id).toSet();
+
+    debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex | cardId=${movedCard.id} columnId=${widget.column.id} position=$newPosition');
+
+    // 1. 낙관적 업데이트: 변경된 컬럼의 카드 전체를 일관된 순서로 반영
+    final optimistic = Map<int, OptimisticCardMove>.from(
+      ref.read(optimisticCardMovesProvider(widget.boardId)),
+    );
+    for (final card in normalized) {
+      optimistic[card.id] = OptimisticCardMove(
+        columnId: widget.column.id,
+        position: card.position,
+      );
+    }
+    ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = optimistic;
+
+    final ws = ref.read(wsServiceProvider);
+    if (ws.isConnected) {
+      debugPrint('[카드이동] 사용자:$userId - WebSocket CARD_MOVE 전송');
+      final reqId = _newMoveReqId(movedCard.id);
+      ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = {
+        ...ref.read(pendingMoveReqIdsProvider(widget.boardId)),
+        reqId,
+      };
+      ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = {
+        ...ref.read(pendingMoveRetryCountProvider(widget.boardId)),
+        reqId: 0,
+      };
+
+      Future<void> sendMove() async {
+        await ws.moveCard(
+          boardId: widget.boardId,
+          cardId: movedCard.id,
+          toColumnId: widget.column.id,
+          beforeCardId: neighbor.$1,
+          afterCardId: neighbor.$2,
+          reqId: reqId,
+        );
+      }
+
+      try {
+        await sendMove();
+        _scheduleMoveAckRetry(
+          reqId: reqId,
+          sendMove: sendMove,
+          affectedCardIds: affectedCardIds,
+        );
+        // CARD_MOVED(req_id 동일) ACK 수신 시 _BoardWsBridge에서 invalidate → 서버 데이터로 확정
+      } catch (e, st) {
+        debugPrint('[카드이동] 사용자:$userId - WebSocket 실패: $e\n$st');
+        if (mounted) {
+          final pending = Set<String>.from(
+            ref.read(pendingMoveReqIdsProvider(widget.boardId)),
+          )..remove(reqId);
+          ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = pending;
+          final retryMap = Map<String, int>.from(
+            ref.read(pendingMoveRetryCountProvider(widget.boardId)),
+          )..remove(reqId);
+          ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+          final rollback = Map<int, OptimisticCardMove>.from(
+            ref.read(optimisticCardMovesProvider(widget.boardId)),
+          );
+          rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
+          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+          widget.onRefresh();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('카드 이동에 실패했습니다.')),
+          );
+        }
+      }
+      return;
+    }
+
+    // WebSocket 미연결 시 REST API 폴백
+    final token = session?.sessionToken;
+    if (token == null) {
+      debugPrint('[카드이동] 사용자:$userId - REST 스킵(토큰없음)');
+      final rollback = Map<int, OptimisticCardMove>.from(
+        ref.read(optimisticCardMovesProvider(widget.boardId)),
+      );
+      rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+      widget.onRefresh();
+      return;
+    }
+    debugPrint('[카드이동] 사용자:$userId - REST API updateCard 호출');
+    try {
+      await ref.read(cardHandlerProvider).updateCard(
+        token,
+        movedCard.id,
+        columnId: widget.column.id,
+        position: newPosition,
+      );
+      final committed = Map<int, OptimisticCardMove>.from(
+        ref.read(optimisticCardMovesProvider(widget.boardId)),
+      );
+      committed.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = committed;
+      debugPrint('[카드이동] 사용자:$userId - REST 성공');
+      widget.onRefresh();
+    } on ApiException catch (e) {
+      debugPrint('[카드이동] 사용자:$userId - REST 실패: ${e.message}');
+      if (mounted) {
+        final rollback = Map<int, OptimisticCardMove>.from(
+          ref.read(optimisticCardMovesProvider(widget.boardId)),
+        );
+        rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
+        ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+        widget.onRefresh();
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    }
+  }
+
+  void _showCardDetail(CardItem card) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (ctx) => CardDetailModal(
+        card: card,
+        boardId: widget.boardId,
+        onRefresh: widget.onRefresh,
+      ),
+    );
+  }
+
+  int _computeRequestPosition(List<CardItem> reorderedCards, int newIndex) {
+    if (reorderedCards.length <= 1) return 0;
+
+    if (newIndex == 0) {
+      return reorderedCards[1].position - 1000;
+    }
+
+    if (newIndex == reorderedCards.length - 1) {
+      return reorderedCards[newIndex - 1].position + 1000;
+    }
+
+    final prev = reorderedCards[newIndex - 1].position;
+    final next = reorderedCards[newIndex + 1].position;
+    var mid = (prev + next) ~/ 2;
+
+    // 간격이 좁아 중복될 수 있으면 최소 1만큼 차이를 둔다.
+    if (mid <= prev) mid = prev + 1;
+    if (mid >= next) mid = next - 1;
+    return mid;
+  }
+
+  (int?, int?) _computeNeighborIds(List<CardItem> reorderedCards, int newIndex) {
+    final beforeId = newIndex > 0 ? reorderedCards[newIndex - 1].id : null;
+    final afterId = newIndex < reorderedCards.length - 1
+        ? reorderedCards[newIndex + 1].id
+        : null;
+    return (beforeId, afterId);
+  }
+
+  String _newMoveReqId(int cardId) =>
+      'move_${widget.boardId}_${cardId}_${DateTime.now().microsecondsSinceEpoch}';
+
+  void _scheduleMoveAckRetry({
+    required String reqId,
+    required Future<void> Function() sendMove,
+    required Set<int> affectedCardIds,
+  }) {
+    Future.delayed(_moveAckTimeout, () async {
+      if (!mounted) return;
+
+      final pending = ref.read(pendingMoveReqIdsProvider(widget.boardId));
+      if (!pending.contains(reqId)) return; // ACK 완료
+
+      final retryMap = Map<String, int>.from(
+        ref.read(pendingMoveRetryCountProvider(widget.boardId)),
+      );
+      final retryCount = retryMap[reqId] ?? 0;
+
+      if (retryCount < 1) {
+        retryMap[reqId] = retryCount + 1;
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+        try {
+          debugPrint('[카드이동] ACK 타임아웃 → 재전송(req_id=$reqId)');
+          await sendMove();
+          _scheduleMoveAckRetry(
+            reqId: reqId,
+            sendMove: sendMove,
+            affectedCardIds: affectedCardIds,
+          );
+          return;
+        } catch (e) {
+          debugPrint('[카드이동] 재전송 실패(req_id=$reqId): $e');
+        }
+      }
+
+      // 재시도 후에도 ACK 없으면 롤백 + 스냅샷 재조회
+      final nextPending = Set<String>.from(
+        ref.read(pendingMoveReqIdsProvider(widget.boardId)),
+      )..remove(reqId);
+      ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = nextPending;
+
+      retryMap.remove(reqId);
+      ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+
+      final rollback = Map<int, OptimisticCardMove>.from(
+        ref.read(optimisticCardMovesProvider(widget.boardId)),
+      );
+      rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('실시간 동기화 지연으로 화면을 새로고침했습니다.')),
+        );
+      }
+    });
+  }
+}
+
+class _AddCardSheet extends ConsumerStatefulWidget {
+  const _AddCardSheet({
+    required this.columnId,
+    required this.boardId,
+    required this.onSaved,
+  });
+
+  final int columnId;
+  final int boardId;
+  final VoidCallback onSaved;
+
+  @override
+  ConsumerState<_AddCardSheet> createState() => _AddCardSheetState();
+}
+
+class _AddCardSheetState extends ConsumerState<_AddCardSheet> {
+  final _titleController = TextEditingController();
+  final _descController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+
+    setState(() => _loading = true);
+    try {
+      final session = ref.read(sessionNotifierProvider).value;
+      final token = session?.sessionToken;
+      if (token == null) return;
+
+      final ws = ref.read(wsServiceProvider);
+      if (ws.isConnected) {
+        final reqId =
+            'create_${widget.boardId}_${widget.columnId}_${DateTime.now().microsecondsSinceEpoch}';
+        await ws.createCard(
+          boardId: widget.boardId,
+          columnId: widget.columnId,
+          title: title,
+          description: _descController.text.trim().isEmpty ? '' : _descController.text.trim(),
+          reqId: reqId,
+        );
+        widget.onSaved();
+        return;
+      }
+
+      await ref.read(cardHandlerProvider).createCard(
+        token,
+        title: title,
+        description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
+        columnId: widget.columnId,
+      );
+      ref.invalidate(boardDetailProvider(widget.boardId));
+      widget.onSaved();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return KeyboardDismissScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(ConfigUI.sheetPaddingH),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '새 카드',
+              style: TextStyle(
+                fontSize: ConfigUI.fontSizeSubtitle,
+                fontWeight: FontWeight.bold,
+                color: context.appTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                hintText: '제목',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descController,
+              decoration: const InputDecoration(
+                hintText: '설명 (선택)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 3,
+            ),
+            const SizedBox(height: 24),
+            FilledButton(
+              onPressed: _loading ? null : _save,
+              child: _loading
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('추가'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

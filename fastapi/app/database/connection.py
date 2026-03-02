@@ -1,19 +1,19 @@
 """
 데이터베이스 연결 설정
-HabitCell 습관 앱 MySQL 연결을 위한 설정
+SyncFlow 협업 보드 앱 MySQL 접속 (이 모듈 사용)
 """
 
+import os
 import pymysql
 
-
-# TODO: 실제 데이터베이스 설정으로 변경 필요
+# .env에서 DB 설정 로드 (main.py에서 load_dotenv 호출됨)
 DB_CONFIG = {
-    'host': 'cheng80.myqnapcloud.com',
-    'user': 'team0101',
-    'password': 'qwer1234',
-    'database': 'habitcell_db',
+    'host': os.getenv('DB_HOST', '127.0.0.1'),
+    'user': os.getenv('DB_USER', 'root'),
+    'password': os.getenv('DB_PASSWORD', ''),
+    'database': os.getenv('DB_NAME', 'syncflow_db'),
     'charset': 'utf8mb4',
-    'port': 13306
+    'port': int(os.getenv('DB_PORT', '3306'))
 }
 
 

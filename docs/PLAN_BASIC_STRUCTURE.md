@@ -1,7 +1,8 @@
 # SyncFlow 기본 구현 계획
 
 > **기준 규칙**: [CURSOR.md](../CURSOR.md)  
-> **참조 문서**: [docs/syncflow/](syncflow/)
+> **참조 문서**: [docs/syncflow/](syncflow/), [docs/email/](email/)  
+> **유지**: 구현 시마다 해당 항목 `[ ]` → `[x]`로 갱신
 
 ---
 
@@ -29,82 +30,73 @@
 ## 3. 구현 단계 (Phase)
 
 ### Phase 0: 기존 코드 제거 및 프로젝트 초기 설정
-- [ ] Flutter: habit/picklet 관련 코드 제거 (habit_db_schema, habit 관련 view/vm 등)
-- [ ] FastAPI: 기존 백업/복구 API 제거, habitcell_db 참조 제거
-- [ ] MySQL: syncflow_db 생성, ERD 기준 스키마 적용
-- [ ] FastAPI: SyncFlow 앱 구조 (app/, api/, database/, utils/ 유지)
-- [ ] Flutter: SyncFlow 전용 lib 구조 (model, vm, view, service, widget)
+- [x] Flutter: habit/picklet 관련 코드 제거 (habit_db_schema, habit 관련 view/vm 등)
+- [x] FastAPI: 기존 백업/복구 API 제거, habitcell_db 참조 제거
+- [x] MySQL: syncflow_db 생성, ERD 기준 스키마 적용
+- [x] FastAPI: SyncFlow 앱 구조 (app/, api/, database/, utils/ 유지)
+- [x] Flutter: SyncFlow 전용 lib 구조 (model, vm, view, service, widget)
 
 ### Phase 1: 계정 및 인증
 **목표**: 로그인/로그아웃 가능한 최소 인증
 
-| 작업 | 설명 | 파일/영역 |
-|------|------|-----------|
-| 1.1 | MySQL 스키마: users, sessions | fastapi/mysql/init_schema.sql |
-| 1.2 | REST API: 이메일 코드 발송, 코드 검증 → 세션 생성 | fastapi/app/api/auth.py |
-| 1.3 | Flutter: 로그인 화면 (이메일 입력 → 코드 입력 → 로그인) | lib/view/auth/ |
-| 1.4 | Flutter: 세션 저장/복원 (GetStorage), 자동 로그인 | lib/vm/, lib/util/ |
-| 1.5 | Flutter: 로그아웃 | lib/vm/session_notifier.dart |
+- [x] 1.1 MySQL 스키마: users, sessions (init_schema.sql)
+- [x] 1.2 REST API: 이메일 코드 발송, 코드 검증 → 세션 생성 (fastapi/app/api/auth.py)
+- [x] 1.3 Flutter: 로그인 화면 (이메일 입력 → 코드 입력 → 로그인) (lib/view/auth/)
+- [x] 1.4 Flutter: 세션 저장/복원 (Secure Storage), 자동 로그인 (lib/vm/, lib/util/)
+- [x] 1.5 Flutter: 로그아웃 (lib/vm/session_notifier.dart)
 
-**참조**: 제품기획서 3.1, ERD users/sessions
+**참조**: 제품기획서 3.1, ERD users/sessions, [docs/email/](email/)
 
 ### Phase 2: 보드 목록 및 생성
 **목표**: 로그인 후 보드 목록 조회, 새 보드 생성
 
-| 작업 | 설명 | 파일/영역 |
-|------|------|-----------|
-| 2.1 | MySQL 스키마: boards, board_members, columns, cards | init_schema.sql |
-| 2.2 | REST API: 보드 목록, 보드 생성 (템플릿 선택) | fastapi/app/api/boards.py |
-| 2.3 | Flutter: 보드 목록 화면 (대시보드) | lib/view/board_list.dart |
-| 2.4 | Flutter: 템플릿 선택 → 보드 생성 플로우 | lib/view/, lib/vm/ |
-| 2.5 | Flutter: BoardListNotifier (Riverpod) | lib/vm/board_list_notifier.dart |
+- [x] 2.1 MySQL 스키마: boards, board_members, columns, cards (init_schema.sql)
+- [x] 2.2 REST API: 보드 목록, 보드 생성 (템플릿 선택) (fastapi/app/api/boards.py)
+- [x] 2.3 Flutter: 보드 목록 화면 (대시보드) (lib/view/board_list_screen.dart)
+- [x] 2.4 Flutter: 템플릿 선택 → 보드 생성 플로우 (lib/view/, lib/vm/)
+- [x] 2.5 Flutter: BoardListNotifier (Riverpod) (lib/vm/board_list_notifier.dart)
 
 **참조**: 제품기획서 3.2~3.4, ERD boards/columns
 
 ### Phase 3: 보드 상세 및 카드 CRUD
 **목표**: 보드 진입 후 컬럼/카드 표시, 카드 생성/수정/이동
 
-| 작업 | 설명 | 파일/영역 |
-|------|------|-----------|
-| 3.1 | REST API: 보드 상세(컬럼+카드), 카드 CRUD | fastapi/app/api/ |
-| 3.2 | Flutter: 보드 상세 화면 (PageView 1컬럼, 세로 스크롤) | lib/view/board_detail.dart |
-| 3.3 | Flutter: 카드 위젯, 카드 상세 모달 | lib/view/, lib/widget/ |
-| 3.4 | Flutter: BoardDetailHandler, CardHandler (DB/API 접근) | lib/vm/ |
-| 3.5 | Flutter: 카드 드래그 재정렬 (같은 컬럼 내) | lib/view/ |
+- [x] 3.1 REST API: 보드 상세(컬럼+카드), 카드 CRUD (fastapi/app/api/)
+- [x] 3.2 Flutter: 보드 상세 화면 (PageView 1컬럼, 세로 스크롤) (lib/view/board_detail_screen.dart)
+- [x] 3.3 Flutter: 카드 위젯, 카드 상세 모달 (lib/view/, lib/widget/)
+- [x] 3.4 Flutter: BoardDetailHandler, CardHandler (DB/API 접근) (lib/vm/)
+- [x] 3.5 Flutter: 카드 드래그 재정렬 (같은 컬럼 내) (lib/view/)
 
 **참조**: UI/UX 설계서, ERD cards
 
 ### Phase 4: WebSocket 실시간 동기화
 **목표**: 카드 이동/수정이 다른 클라이언트에 실시간 반영
 
-| 작업 | 설명 | 파일/영역 |
-|------|------|-----------|
-| 4.1 | FastAPI: WebSocket 엔드포인트, 세션 토큰 검증 | fastapi/app/ws/ |
-| 4.2 | FastAPI: JOIN_BOARD, LEAVE_BOARD, 룸 브로드캐스트 | fastapi/app/ws/ |
-| 4.3 | FastAPI: CARD_CREATE/MOVE/UPDATE 이벤트 처리 | fastapi/app/ws/ |
-| 4.4 | Flutter: WebSocket 연결/재연결, JOIN_BOARD | lib/service/ws_service.dart |
-| 4.5 | Flutter: 이벤트 수신 → Riverpod 상태 반영 (optimistic update) | lib/vm/ |
-| 4.6 | Flutter: Presence UI (접속자 아바타) | lib/view/ |
+- [x] 4.1 FastAPI: WebSocket 엔드포인트, 세션 토큰 검증 (fastapi/app/ws/)
+- [x] 4.2 FastAPI: JOIN_BOARD, LEAVE_BOARD, 룸 브로드캐스트 (fastapi/app/ws/)
+- [x] 4.3 FastAPI: CARD_CREATE/MOVE/UPDATE 이벤트 처리 (fastapi/app/ws/)
+- [x] 4.4 Flutter: WebSocket 연결/재연결, JOIN_BOARD (lib/service/ws_service.dart)
+- [x] 4.5 Flutter: 이벤트 수신 → Riverpod 상태 반영 (optimistic update) (lib/vm/)
+- [ ] 4.6 Flutter: Presence UI (접속자 아바타) (lib/view/)
 
 **참조**: WebSocket 이벤트 스펙 v1
 
 ### Phase 5: Soft Lock 및 Owner Lock
 **목표**: 카드 편집 충돌 방지, Owner Lock 지원
 
-| 작업 | 설명 | 파일/영역 |
-|------|------|-----------|
-| 5.1 | FastAPI: Soft lock 메모리 저장, TTL 30초, RENEW/RELEASE | fastapi/app/ws/ |
-| 5.2 | FastAPI: LOCK_ACQUIRE/RENEW/RELEASE, CARD_LOCKED/UNLOCKED | fastapi/app/ws/ |
-| 5.3 | Flutter: 카드 상세 진입 시 LOCK_ACQUIRE, 저장/취소 시 RELEASE | lib/vm/, lib/view/ |
-| 5.4 | Flutter: 잠긴 카드 읽기 전용, "OO님이 편집 중" 표시 | lib/view/ |
-| 5.5 | (옵션) Owner Lock: owner_lock 필드, CARD_OWNER_LOCK_SET | ERD 반영 |
+- [ ] 5.1 FastAPI: Soft lock 메모리 저장, TTL 30초, RENEW/RELEASE (fastapi/app/ws/)
+- [ ] 5.2 FastAPI: LOCK_ACQUIRE/RENEW/RELEASE, CARD_LOCKED/UNLOCKED (fastapi/app/ws/)
+- [ ] 5.3 Flutter: 카드 상세 진입 시 LOCK_ACQUIRE, 저장/취소 시 RELEASE (lib/vm/, lib/view/)
+- [ ] 5.4 Flutter: 잠긴 카드 읽기 전용, "OO님이 편집 중" 표시 (lib/view/)
+- [ ] 5.5 (옵션) Owner Lock: owner_lock 필드, CARD_OWNER_LOCK_SET (ERD 반영)
 
 **참조**: WebSocket 스펙 6절, 7.0.2
 
 ### Phase 6: 2차 확장 (MVP 이후)
-- 멤버 초대 (board_invites, 초대 코드)
-- 컬럼 추가/수정/삭제/재정렬
-- Markdown 확장 (체크리스트, @멘션)
+
+- [ ] 6.1 멤버 초대 (board_invites, 초대 코드)
+- [ ] 6.2 컬럼 추가/수정/삭제/재정렬
+- [ ] 6.3 Markdown 확장 (체크리스트, @멘션)
 
 ---
 
@@ -196,10 +188,10 @@ fastapi/app/
 
 ## 9. 다음 액션
 
-1. **Phase 0** 승인 후 프로젝트 초기 설정 진행
-2. **Phase 1** 설계: auth API 스펙, 로그인 화면 와이어프레임
-3. 각 Phase 시작 전 접근 방식 설명 → 승인 → 코딩 (CURSOR.md 1항)
+1. **Phase 1** 진행: 1.2 auth API → 1.3~1.5 Flutter 로그인
+2. 각 Phase 시작 전 접근 방식 설명 → 승인 → 코딩 (CURSOR.md 1항)
+3. 구현 완료 시 본 문서 해당 항목 체크 `[x]` 갱신
 
 ---
 
-*작성일: 2026-03-02*
+*작성일: 2026-03-02 | 최종 갱신: Phase 0 완료*

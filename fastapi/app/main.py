@@ -1,6 +1,6 @@
 """
-Habit App FastAPI 백엔드
-습관 앱 백업/복구 API (Local-first + Snapshot Backup)
+SyncFlow FastAPI 백엔드
+실시간 경량 협업 칸반 보드 API
 """
 
 from fastapi import FastAPI
@@ -13,8 +13,8 @@ env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env')
 load_dotenv(dotenv_path=env_path)
 
 app = FastAPI(
-    title="Habit App API",
-    description="습관 앱 백업/복구를 위한 REST API",
+    title="SyncFlow API",
+    description="실시간 경량 협업 칸반 보드 REST API",
     version="1.0.0"
 )
 
@@ -30,15 +30,22 @@ app.add_middleware(
 # ============================================
 # 라우터 등록
 # ============================================
-from app.api import backups, recovery
-app.include_router(backups.router, prefix="/v1/backups", tags=["backups"])
-app.include_router(recovery.router, prefix="/v1/recovery", tags=["recovery"])
+from app.api import auth, boards, cards
+
+app.include_router(auth.router, prefix="/v1/auth", tags=["auth"])
+app.include_router(boards.router, prefix="/v1/boards", tags=["boards"])
+app.include_router(cards.router, prefix="/v1/cards", tags=["cards"])
+
+# WebSocket
+from app.ws.connection import websocket_endpoint
+app.websocket("/ws")(websocket_endpoint)
+
 
 @app.get("/")
 async def root():
     """루트 엔드포인트 - API 정보 반환"""
     return {
-        "message": "Habit App API",
+        "message": "SyncFlow API",
         "status": "running",
         "version": "1.0.0",
         "endpoints": {
@@ -52,14 +59,6 @@ async def root():
 @app.get("/health")
 async def health_check():
     """헬스 체크 엔드포인트"""
-    # 데이터베이스 연결이 필요할 때 주석 해제
-    # try:
-    #     conn = connect_db()
-    #     conn.close()
-    #     return {"status": "healthy", "database": "connected"}
-    # except Exception as e:
-    #     return {"status": "unhealthy", "error": str(e)}
-    
     return {
         "status": "healthy",
         "message": "API is running"

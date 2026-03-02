@@ -2,16 +2,18 @@
 // 메인 스캐폴드 - 홈 화면 표시
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
-import 'package:syncflow/view/home.dart';
+import 'package:syncflow/view/board_list_screen.dart';
+import 'package:syncflow/vm/session_notifier.dart';
 
 /// 메인 스캐폴드 - 홈 화면
-class MainScaffold extends StatelessWidget {
+class MainScaffold extends ConsumerWidget {
   const MainScaffold({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final p = context.appTheme;
 
     return Scaffold(
@@ -24,8 +26,17 @@ class MainScaffold extends StatelessWidget {
           'SyncFlow',
           style: TextStyle(color: p.textPrimary, fontSize: ConfigUI.fontSizeAppBar),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await ref.read(sessionNotifierProvider.notifier).logout();
+            },
+            tooltip: '로그아웃',
+          ),
+        ],
       ),
-      body: const Home(),
+      body: const BoardListScreen(),
     );
   }
 }

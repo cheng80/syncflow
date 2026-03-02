@@ -20,7 +20,7 @@ class EmailService:
     SMTP_PORT = int(os.getenv('SMTP_PORT', '587'))
     SMTP_USER = os.getenv('SMTP_USER', '')  # 발신자 이메일
     SMTP_PASSWORD = os.getenv('SMTP_PASSWORD', '')  # 발신자 비밀번호 또는 앱 비밀번호
-    FROM_NAME = os.getenv('FROM_NAME', 'HabitCell')
+    FROM_NAME = os.getenv('FROM_NAME', 'SyncFlow')
     
     @classmethod
     def get_from_email(cls) -> str:
@@ -31,7 +31,7 @@ class EmailService:
         from_email = os.getenv('FROM_EMAIL', '')
         # Gmail 사용 시 또는 FROM_EMAIL이 설정되지 않은 경우 SMTP_USER 사용
         if not from_email or 'gmail.com' in cls.SMTP_HOST.lower():
-            return cls.SMTP_USER if cls.SMTP_USER else 'noreply@habitcell.com'
+            return cls.SMTP_USER if cls.SMTP_USER else 'noreply@syncflow.app'
         return from_email
     
     @classmethod
@@ -56,7 +56,7 @@ class EmailService:
         """
         try:
             # 이메일 내용 작성
-            subject = '[HabitCell] 비밀번호 변경 인증 코드'
+            subject = '[SyncFlow] 비밀번호 변경 인증 코드'
             
             html_content = f"""
             <html>
@@ -137,7 +137,7 @@ class EmailService:
             bool: 발송 성공 여부
         """
         try:
-            subject = '[HabitCell] 비밀번호 변경 링크'
+            subject = '[SyncFlow] 비밀번호 변경 링크'
             
             html_content = f"""
             <html>
@@ -183,14 +183,14 @@ class EmailService:
             return False
 
     @classmethod
-    def send_verification_code(
+    def send_login_code(
         cls,
         to_email: str,
         code: str,
         expires_minutes: int = 10
     ) -> bool:
         """
-        Habit App 복구용 6자리 인증 코드 이메일 발송
+        SyncFlow 로그인용 6자리 인증 코드 이메일 발송
 
         Args:
             to_email: 수신자 이메일
@@ -201,14 +201,14 @@ class EmailService:
             bool: 발송 성공 여부
         """
         try:
-            subject = '[HabitCell] 백업 복구 인증 코드'
+            subject = '[SyncFlow] 로그인 인증 코드'
 
             html_content = f"""
             <html>
             <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-                    <h2 style="color: #212121;">백업 복구 인증</h2>
-                    <p>HabitCell 백업 복구를 위한 인증 코드입니다.</p>
+                    <h2 style="color: #212121;">로그인 인증</h2>
+                    <p>SyncFlow 로그인을 위한 인증 코드입니다.</p>
                     <div style="background-color: #f5f5f5; padding: 20px; text-align: center; margin: 20px 0; border-radius: 8px;">
                         <h1 style="color: #212121; margin: 0; font-size: 32px; letter-spacing: 5px;">{code}</h1>
                     </div>
@@ -220,9 +220,9 @@ class EmailService:
             """
 
             text_content = f"""
-            백업 복구 인증
+            로그인 인증
 
-            HabitCell 백업 복구를 위한 인증 코드입니다.
+            SyncFlow 로그인을 위한 인증 코드입니다.
 
             인증 코드: {code}
 

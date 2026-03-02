@@ -24,8 +24,6 @@ class ConfigUI {
   static const double radiusInput = 8.0;
   static const double radiusChip = 20.0;
   static const double radiusTagCell = 8.0;
-  /// 히트맵 셀 (작은 정사각형)
-  static const double radiusHeatmapCell = 2.0;
 
   static BorderRadius get cardRadius => BorderRadius.circular(radiusCard);
   static BorderRadius get sheetRadius => BorderRadius.circular(radiusSheet);
@@ -34,8 +32,6 @@ class ConfigUI {
   static BorderRadius get chipRadius => BorderRadius.circular(radiusChip);
   static BorderRadius get tagCellRadius =>
       BorderRadius.circular(radiusTagCell);
-  static BorderRadius get heatmapCellRadius =>
-      BorderRadius.circular(radiusHeatmapCell);
 
   // ─── 그림자·입체감 (Soft UI - 부드러운 그림자) ─────────────────────────
   /// 카드/리스트 아이템 (약한 그림자)
@@ -94,9 +90,4 @@ class ConfigUI {
   static const double fontSizeMeta = 12.0;
   static const double fontSizeCaption = 11.0;
 
-  // ─── 습관 카드 그리드 (HabitItem 전용) ─────────────────────────────────
-  static const int habitCardGridColumns = 6;
-  static const double habitCardCellSizeMin = 36.0;
-  static const double habitCardCellSizeMax = 52.0;
-  static const double habitCardCellSpacing = 8.0;
 }
