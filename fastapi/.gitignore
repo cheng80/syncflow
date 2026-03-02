@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# FastAPI
+*.db
+*.sqlite
+
+# 환경변수
+.env
+.env.local
+
+# Firebase 서비스 계정 키 (절대 커밋하지 않음!)
+serviceAccountKey.json
+serviceAccountKey.zip
+*.json.key
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

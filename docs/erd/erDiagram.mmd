@@ -1,0 +1,96 @@
+erDiagram
+    users ||--o{ sessions : "user_id"
+    users ||--o{ boards : "owner_id"
+    boards ||--o{ board_members : "board_id"
+    users ||--o{ board_members : "user_id"
+
+    boards ||--o{ columns : "board_id"
+    boards ||--o{ cards : "board_id"
+    columns ||--o{ cards : "column_id"
+
+    boards ||--o{ board_invites : "board_id"
+    users ||--o{ board_invites : "created_by"
+
+    users ||--o{ cards : "assignee_id"
+    users ||--o{ cards : "created_by"
+    users ||--o{ cards : "updated_by"
+    users ||--o{ cards : "owner_lock_by"
+
+    users {
+        bigint id PK
+        varchar email "UNIQUE"
+        datetime email_verified_at
+        datetime created_at
+        datetime updated_at
+    }
+
+    sessions {
+        bigint id PK
+        bigint user_id FK
+        char session_token "UUID4(36) UNIQUE"
+        datetime expires_at
+        boolean revoked
+        datetime created_at
+    }
+
+    boards {
+        bigint id PK
+        bigint owner_id FK
+        varchar title
+        json template_json
+        datetime created_at
+        datetime updated_at
+    }
+
+    board_members {
+        bigint id PK
+        bigint board_id FK
+        bigint user_id FK
+        varchar role "owner|member"
+        datetime joined_at
+    }
+
+    columns {
+        bigint id PK
+        bigint board_id FK
+        varchar title
+        int position
+        boolean is_done
+        datetime created_at
+        datetime updated_at
+    }
+
+    cards {
+        bigint id PK
+        bigint board_id FK
+        bigint column_id FK
+        varchar title
+        text description
+        varchar priority "low|medium|high"
+        bigint assignee_id FK
+        datetime due_date
+
+        varchar status "active|done|archived"
+        int position
+
+        boolean owner_lock
+        bigint owner_lock_by FK
+        datetime owner_lock_at
+
+        datetime updated_at
+        bigint updated_by FK
+        datetime created_at
+        bigint created_by FK
+    }
+
+    board_invites {
+        bigint id PK
+        bigint board_id FK
+        varchar code "UNIQUE"
+        bigint created_by FK
+        datetime expires_at
+        int max_uses
+        int used_count
+        boolean revoked
+        datetime created_at
+    }
