@@ -107,15 +107,21 @@ class MyApp extends ConsumerWidget {
           surface: AppThemeColors.lightBackground,
           onSurface: const Color(0xFF212121),
         ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(foregroundColor: Colors.white),
+        ),
       ),
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: AppThemeColors.darkBackground,
         colorScheme: ColorScheme.dark(
-          primary: Colors.white,
-          onPrimary: const Color(0xFF1A1A1A),
+          primary: const Color(0xFF1976D2),
+          onPrimary: Colors.white,
           surface: AppThemeColors.darkBackground,
           onSurface: Colors.white,
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: FilledButton.styleFrom(foregroundColor: Colors.white),
         ),
       ),
       home: sessionAsync.when(

@@ -110,6 +110,9 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
     final detail = await boardHandler.getBoardDetail(token, board.id);
     final columns = detail.columns..sort((a, b) => a.position.compareTo(b.position));
 
+    // 이미 카드가 있으면 스킵 (재시도 시 중복 방지)
+    if (detail.cards.isNotEmpty) return board;
+
     const sampleTitles = [
       ['할 일 샘플'],
       ['진행 중 샘플'],

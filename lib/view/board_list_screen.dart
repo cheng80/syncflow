@@ -12,13 +12,18 @@ import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/view/board_detail_screen.dart';
+import 'package:showcaseview/showcaseview.dart';
 import 'package:syncflow/util/app_storage.dart';
+import 'package:syncflow/util/tutorial_keys.dart';
 import 'package:syncflow/vm/board_list_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 
 /// 보드 목록 화면
 class BoardListScreen extends ConsumerWidget {
-  const BoardListScreen({super.key});
+  const BoardListScreen({super.key, this.tutorialKeys});
+
+  /// ShowcaseView 튜토리얼용 키 (MainScaffold에서 전달)
+  final TutorialKeys? tutorialKeys;
 
   /// 보드 참가 다이얼로그 (MainScaffold 앱바 등에서 호출)
   static Future<void> showBoardJoinDialog(BuildContext context, WidgetRef ref) async {
@@ -168,16 +173,21 @@ class BoardListScreen extends ConsumerWidget {
     );
   }
 
+  static bool _isCreatingTutorial = false;
+
   static Future<void> _createTutorialBoardOnFirstInstall(BuildContext context, WidgetRef ref) async {
-    if (AppStorage.hasTutorialBoardCreated) return;
-    await AppStorage.setTutorialBoardCreated(); // 재진입 방지
+    if (AppStorage.hasTutorialBoardCreated || _isCreatingTutorial) return;
+    _isCreatingTutorial = true;
     try {
       await ref.read(boardListNotifierProvider.notifier).ensureTutorialBoardWithSamples(
         cardsPerColumn: 1,
       );
+      await AppStorage.setTutorialBoardCreated(); // 성공 후에만 플래그 설정
       await ref.read(boardListNotifierProvider.notifier).refresh();
     } catch (_) {
-      await AppStorage.resetTutorialBoardCreated(); // 실패 시 플래그 해제 → 재시도 가능
+      // 실패 시 플래그 미설정 → 재시도 가능 (튜토리얼 보드가 있어도 카드 없으면 재실행됨)
+    } finally {
+      _isCreatingTutorial = false;
     }
   }
 
@@ -214,9 +224,11 @@ class BoardListScreen extends ConsumerWidget {
 
     ref.listen(boardListNotifierProvider, (prev, next) {
       next.whenData((boards) {
-        if (boards.isEmpty &&
+        final hasTutorial = boards.any((b) => b.title == BoardListNotifier.tutorialBoardTitle);
+        final shouldCreate = (boards.isEmpty || hasTutorial) &&
             !AppStorage.hasTutorialBoardCreated &&
-            ref.read(sessionNotifierProvider).value?.sessionToken != null) {
+            ref.read(sessionNotifierProvider).value?.sessionToken != null;
+        if (shouldCreate) {
           _createTutorialBoardOnFirstInstall(context, ref);
         }
       });
@@ -237,15 +249,16 @@ class BoardListScreen extends ConsumerWidget {
           ],
         ),
       ),
-      data: (boards) => _BoardListContent(boards: boards),
+      data: (boards) => _BoardListContent(boards: boards, tutorialKeys: tutorialKeys),
     );
   }
 }
 
 class _BoardListContent extends ConsumerStatefulWidget {
-  const _BoardListContent({required this.boards});
+  const _BoardListContent({required this.boards, this.tutorialKeys});
 
   final List<BoardItem> boards;
+  final TutorialKeys? tutorialKeys;
 
   @override
   ConsumerState<_BoardListContent> createState() => _BoardListContentState();
@@ -253,6 +266,23 @@ class _BoardListContent extends ConsumerStatefulWidget {
 
 class _BoardListContentState extends ConsumerState<_BoardListContent> {
   _BoardFilter _filter = _BoardFilter.all;
+
+  Widget _wrapShowcase({
+    GlobalKey? key,
+    required String description,
+    required Widget child,
+  }) {
+    if (key == null) return child;
+    final p = context.appTheme;
+    return Showcase(
+      key: key,
+      description: description,
+      tooltipBackgroundColor: p.sheetBackground,
+      textColor: p.textOnSheet,
+      tooltipBorderRadius: ConfigUI.cardRadius,
+      child: child,
+    );
+  }
 
   bool _isMyBoard(BoardItem board, int? myUserId) {
     if (myUserId == null) return false;
@@ -282,16 +312,24 @@ class _BoardListContentState extends ConsumerState<_BoardListContent> {
             child: Row(
               children: [
                 const Spacer(),
-                OutlinedButton.icon(
-                  onPressed: () => BoardListScreen.showBoardJoinDialog(context, ref),
-                  icon: const Icon(Icons.group_add, size: 20),
-                  label: Text(context.tr('boardJoin')),
+                _wrapShowcase(
+                  key: widget.tutorialKeys?.join,
+                  description: context.tr('tutorial_step_3'),
+                  child: OutlinedButton.icon(
+                    onPressed: () => BoardListScreen.showBoardJoinDialog(context, ref),
+                    icon: const Icon(Icons.group_add, size: 20),
+                    label: Text(context.tr('boardJoin')),
+                  ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: () => BoardListScreen.showBoardCreateDialog(context, ref),
-                  icon: const Icon(Icons.add, size: 20),
-                  label: Text(context.tr('boardNew')),
+                _wrapShowcase(
+                  key: widget.tutorialKeys?.create,
+                  description: context.tr('tutorial_step_4'),
+                  child: FilledButton.icon(
+                    onPressed: () => BoardListScreen.showBoardCreateDialog(context, ref),
+                    icon: const Icon(Icons.add, size: 20),
+                    label: Text(context.tr('boardNew')),
+                  ),
                 ),
               ],
             ),
@@ -300,25 +338,29 @@ class _BoardListContentState extends ConsumerState<_BoardListContent> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
-            child: Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: Text(context.tr('myBoards')),
-                  selected: _filter == _BoardFilter.mine,
-                  onSelected: (_) => setState(() => _filter = _BoardFilter.mine),
-                ),
-                ChoiceChip(
-                  label: Text(context.tr('memberBoards')),
-                  selected: _filter == _BoardFilter.member,
-                  onSelected: (_) => setState(() => _filter = _BoardFilter.member),
-                ),
-                ChoiceChip(
-                  label: Text(context.tr('all')),
-                  selected: _filter == _BoardFilter.all,
-                  onSelected: (_) => setState(() => _filter = _BoardFilter.all),
-                ),
-              ],
+            child: _wrapShowcase(
+              key: widget.tutorialKeys?.filter,
+              description: context.tr('tutorial_step_5'),
+              child: Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: Text(context.tr('myBoards')),
+                    selected: _filter == _BoardFilter.mine,
+                    onSelected: (_) => setState(() => _filter = _BoardFilter.mine),
+                  ),
+                  ChoiceChip(
+                    label: Text(context.tr('memberBoards')),
+                    selected: _filter == _BoardFilter.member,
+                    onSelected: (_) => setState(() => _filter = _BoardFilter.member),
+                  ),
+                  ChoiceChip(
+                    label: Text(context.tr('all')),
+                    selected: _filter == _BoardFilter.all,
+                    onSelected: (_) => setState(() => _filter = _BoardFilter.all),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

@@ -40,11 +40,9 @@ class AppThemeColors {
           ? const Color(0xFF2C2C2C)
           : Colors.white;
 
-  /// 주요 포인트 색
+  /// 주요 포인트 색 (라이트/다크 모두 파란색, 배경 위 텍스트는 흰색)
   static Color primary(BuildContext context) =>
-      _isDark(context)
-          ? Colors.white
-          : const Color(0xFF1976D2);
+      const Color(0xFF1976D2);
 
   /// 보조 포인트 색
   static Color accent(BuildContext context) => Colors.red;
@@ -67,11 +65,9 @@ class AppThemeColors {
           ? const Color(0xFFD7D7D7)
           : const Color(0xFF616161);
 
-  /// Primary 배경 위 텍스트 색
+  /// Primary(파란색) 배경 위 텍스트 색 (라이트/다크 모두 흰색)
   static Color textOnPrimary(BuildContext context) =>
-      _isDark(context)
-          ? const Color(0xFF1A1A1A)
-          : Colors.white;
+      Colors.white;
 
   /// BottomSheet 위 텍스트 색
   static Color textOnSheet(BuildContext context) =>

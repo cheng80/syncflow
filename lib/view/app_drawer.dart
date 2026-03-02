@@ -21,14 +21,20 @@ import 'package:syncflow/vm/board_list_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/vm/theme_notifier.dart';
 import 'package:syncflow/vm/wakelock_notifier.dart';
+import 'package:showcaseview/showcaseview.dart';
+import 'package:syncflow/util/tutorial_keys.dart';
 import 'package:syncflow/widget/language_picker_sheet.dart';
 
 /// AppDrawer - 설정 및 부가 기능
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({
     super.key,
+    this.tutorialKeys,
     this.onReplayTutorial,
   });
+
+  /// ShowcaseView 튜토리얼용 키 (MainScaffold에서 전달)
+  final TutorialKeys? tutorialKeys;
 
   /// 튜토리얼 다시 보기 콜백 (null이면 "준비 중" 스낵바)
   final VoidCallback? onReplayTutorial;
@@ -140,29 +146,7 @@ class AppDrawer extends ConsumerWidget {
                       }
                     },
                   ),
-                  ListTile(
-                    leading: Icon(Icons.school_outlined, color: p.icon),
-                    title: Text(
-                      context.tr('tutorial_replay'),
-                      style: TextStyle(color: p.textPrimary, fontSize: 16),
-                    ),
-                    trailing: Icon(Icons.chevron_right, color: p.textSecondary),
-                    onTap: () {
-                      Navigator.pop(context);
-                      if (onReplayTutorial != null) {
-                        AppStorage.resetTutorialCompleted();
-                        onReplayTutorial!();
-                      } else {
-                        final ctx = rootNavigatorKey.currentContext ?? context;
-                        if (ctx.mounted) {
-                          showOverlaySnackBar(
-                            ctx,
-                            message: context.tr('tutorialPreparing'),
-                          );
-                        }
-                      }
-                    },
-                  ),
+                  _buildTutorialReplayTile(context, p),
                   Divider(color: p.divider, height: 1),
                   ListTile(
                     leading: Icon(Icons.logout, color: p.icon),
@@ -242,6 +226,43 @@ class AppDrawer extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildTutorialReplayTile(BuildContext context, AppThemeColorsHelper p) {
+    final tile = ListTile(
+      leading: Icon(Icons.school_outlined, color: p.icon),
+      title: Text(
+        context.tr('tutorial_replay'),
+        style: TextStyle(color: p.textPrimary, fontSize: 16),
+      ),
+      trailing: Icon(Icons.chevron_right, color: p.textSecondary),
+      onTap: () {
+        Navigator.pop(context);
+        if (onReplayTutorial != null) {
+          AppStorage.resetTutorialCompleted();
+          onReplayTutorial!();
+        } else {
+          final ctx = rootNavigatorKey.currentContext ?? context;
+          if (ctx.mounted) {
+            showOverlaySnackBar(
+              ctx,
+              message: context.tr('tutorialPreparing'),
+            );
+          }
+        }
+      },
+    );
+    if (tutorialKeys != null) {
+      return Showcase(
+        key: tutorialKeys!.drawerTutorial,
+        description: context.tr('tutorial_step_1'),
+        tooltipBackgroundColor: p.sheetBackground,
+        textColor: p.textOnSheet,
+        tooltipBorderRadius: ConfigUI.cardRadius,
+        child: tile,
+      );
+    }
+    return tile;
   }
 
   Widget _buildMenuHeader(BuildContext context, WidgetRef ref, AppThemeColorsHelper p) {
