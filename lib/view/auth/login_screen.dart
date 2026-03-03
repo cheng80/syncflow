@@ -1,5 +1,12 @@
 // login_screen.dart
 // 이메일 입력 → 코드 발송 → 코드 입력 → 로그인
+//
+// [구조 하이라키]
+// LoginScreen
+// └─ _LoginScreenState
+//    ├─ _sendCode(인증코드 발송)
+//    ├─ _verifyCode(코드 검증/로그인)
+//    └─ _goBack(단계 되돌리기)
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -29,6 +36,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _loading = false;
   String? _error;
 
+  /// 입력 컨트롤러 리소스를 해제한다.
   @override
   void dispose() {
     _emailController.dispose();
@@ -36,6 +44,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
+  /// 이메일 인증 코드를 요청하고 입력 단계로 이동한다.
   Future<void> _sendCode() async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
@@ -69,6 +78,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// 입력된 인증 코드를 검증하고 세션을 확정한다.
   Future<void> _verifyCode() async {
     final email = _email ?? _emailController.text.trim();
     final code = _codeController.text.trim();
@@ -109,6 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
+  /// 코드 입력 단계에서 이메일 입력 단계로 되돌린다.
   void _goBack() {
     setState(() {
       _email = null;
@@ -117,6 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
   }
 
+  /// 로그인 화면 전체 UI를 렌더링한다.
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;

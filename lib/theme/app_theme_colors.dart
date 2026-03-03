@@ -79,6 +79,18 @@ class AppThemeColors {
   static Color borderBrutal(BuildContext context) =>
       _isDark(context) ? const Color(0xFFE0E0E0) : Colors.black;
 
+  /// 보드 리스트 카드: 내 보드 테두리 색
+  static Color boardMineBorder(BuildContext context) =>
+      _isDark(context)
+          ? const Color(0xFF64B5F6)
+          : const Color(0xFF1565C0);
+
+  /// 보드 리스트 카드: 참여 보드 테두리 색
+  static Color boardMemberBorder(BuildContext context) =>
+      _isDark(context)
+          ? const Color(0xFFFFD54F)
+          : const Color(0xFFFF8F00);
+
   /// 구분선 색
   static Color divider(BuildContext context) =>
       _isDark(context)
@@ -172,6 +184,8 @@ class AppThemeColorsHelper {
   Color get textOnPrimary => AppThemeColors.textOnPrimary(_context);
   Color get textOnSheet => AppThemeColors.textOnSheet(_context);
   Color get borderBrutal => AppThemeColors.borderBrutal(_context);
+  Color get boardMineBorder => AppThemeColors.boardMineBorder(_context);
+  Color get boardMemberBorder => AppThemeColors.boardMemberBorder(_context);
   Color get divider => AppThemeColors.divider(_context);
   Color get icon => AppThemeColors.icon(_context);
   Color get iconOnSheet => AppThemeColors.iconOnSheet(_context);

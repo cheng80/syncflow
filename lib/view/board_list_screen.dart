@@ -1,5 +1,12 @@
 // board_list_screen.dart
 // 보드 목록 (대시보드)
+//
+// [구조 하이라키]
+// BoardListScreen(엔트리)
+// └─ _BoardListContent
+//    ├─ BoardListActionsRow(widget)
+//    ├─ BoardListFilterChips(widget)
+//    └─ _BoardTile(보드 카드)
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -8,11 +15,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:syncflow/model/board.dart';
 import 'package:syncflow/navigation/custom_navigation_util.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
+import 'package:syncflow/widget/board_list_controls.dart';
 import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/view/board_detail_screen.dart';
-import 'package:showcaseview/showcaseview.dart';
 import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/util/tutorial_keys.dart';
 import 'package:syncflow/vm/board_list_notifier.dart';
@@ -26,6 +33,7 @@ class BoardListScreen extends ConsumerWidget {
   final TutorialKeys? tutorialKeys;
 
   /// 보드 참가 다이얼로그 (MainScaffold 앱바 등에서 호출)
+  /// 보드 참가 코드 입력 시트를 연다.
   static Future<void> showBoardJoinDialog(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController();
     await showModalBottomSheet(
@@ -70,6 +78,7 @@ class BoardListScreen extends ConsumerWidget {
     );
   }
 
+  /// 보드 참가 요청을 수행하고 성공 시 상세 화면으로 이동한다.
   static Future<void> _doJoinBoard(
     BuildContext context,
     WidgetRef ref,
@@ -102,6 +111,7 @@ class BoardListScreen extends ConsumerWidget {
   }
 
   /// 보드 생성 다이얼로그 (MainScaffold 앱바 등에서 호출)
+  /// 보드 생성 시트를 연다.
   static Future<void> showBoardCreateDialog(BuildContext context, WidgetRef ref) async {
     final controller = TextEditingController();
     String selectedTemplate = 'todo';
@@ -175,6 +185,7 @@ class BoardListScreen extends ConsumerWidget {
 
   static bool _isCreatingTutorial = false;
 
+  /// 첫 설치 사용자용 튜토리얼 보드/샘플 카드를 자동 생성한다.
   static Future<void> _createTutorialBoardOnFirstInstall(BuildContext context, WidgetRef ref) async {
     if (AppStorage.hasTutorialBoardCreated || _isCreatingTutorial) return;
     _isCreatingTutorial = true;
@@ -191,6 +202,7 @@ class BoardListScreen extends ConsumerWidget {
     }
   }
 
+  /// 보드 생성 요청을 수행하고 성공 시 상세 화면으로 이동한다.
   static Future<void> _doCreateBoard(
     BuildContext context,
     WidgetRef ref,
@@ -218,6 +230,7 @@ class BoardListScreen extends ConsumerWidget {
     }
   }
 
+  /// 보드 목록 로딩/에러/데이터 상태를 분기 렌더링한다.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final boardsAsync = ref.watch(boardListNotifierProvider);
@@ -267,32 +280,18 @@ class _BoardListContent extends ConsumerStatefulWidget {
 class _BoardListContentState extends ConsumerState<_BoardListContent> {
   _BoardFilter _filter = _BoardFilter.all;
 
-  Widget _wrapShowcase({
-    GlobalKey? key,
-    required String description,
-    required Widget child,
-  }) {
-    if (key == null) return child;
-    final p = context.appTheme;
-    return Showcase(
-      key: key,
-      description: description,
-      tooltipBackgroundColor: p.sheetBackground,
-      textColor: p.textOnSheet,
-      tooltipBorderRadius: ConfigUI.cardRadius,
-      child: child,
-    );
-  }
-
+  /// 현재 로그인 사용자가 해당 보드의 소유자인지 판별한다.
   bool _isMyBoard(BoardItem board, int? myUserId) {
     if (myUserId == null) return false;
     return board.ownerId == myUserId;
   }
 
+  /// 필터/액션/리스트를 포함한 보드 목록 본문을 렌더링한다.
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
     final myUserId = ref.watch(sessionNotifierProvider).value?.userId;
+
     final filteredBoards = widget.boards.where((b) {
       switch (_filter) {
         case _BoardFilter.mine:
@@ -309,58 +308,33 @@ class _BoardListContentState extends ConsumerState<_BoardListContent> {
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.all(ConfigUI.screenPaddingH),
-            child: Row(
-              children: [
-                const Spacer(),
-                _wrapShowcase(
-                  key: widget.tutorialKeys?.join,
-                  description: context.tr('tutorial_step_3'),
-                  child: OutlinedButton.icon(
-                    onPressed: () => BoardListScreen.showBoardJoinDialog(context, ref),
-                    icon: const Icon(Icons.group_add, size: 20),
-                    label: Text(context.tr('boardJoin')),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _wrapShowcase(
-                  key: widget.tutorialKeys?.create,
-                  description: context.tr('tutorial_step_4'),
-                  child: FilledButton.icon(
-                    onPressed: () => BoardListScreen.showBoardCreateDialog(context, ref),
-                    icon: const Icon(Icons.add, size: 20),
-                    label: Text(context.tr('boardNew')),
-                  ),
-                ),
-              ],
+            child: BoardListActionsRow(
+              joinShowcaseKey: widget.tutorialKeys?.join,
+              createShowcaseKey: widget.tutorialKeys?.create,
+              joinDescription: context.tr('tutorial_step_3'),
+              createDescription: context.tr('tutorial_step_4'),
+              joinLabel: context.tr('boardJoin'),
+              createLabel: context.tr('boardNew'),
+              onJoin: () => BoardListScreen.showBoardJoinDialog(context, ref),
+              onCreate: () => BoardListScreen.showBoardCreateDialog(context, ref),
             ),
           ),
         ),
         SliverToBoxAdapter(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
-            child: _wrapShowcase(
-              key: widget.tutorialKeys?.filter,
+            child: BoardListFilterChips(
+              showcaseKey: widget.tutorialKeys?.filter,
               description: context.tr('tutorial_step_5'),
-              child: Wrap(
-                spacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: Text(context.tr('myBoards')),
-                    selected: _filter == _BoardFilter.mine,
-                    onSelected: (_) => setState(() => _filter = _BoardFilter.mine),
-                  ),
-                  ChoiceChip(
-                    label: Text(context.tr('memberBoards')),
-                    selected: _filter == _BoardFilter.member,
-                    onSelected: (_) => setState(() => _filter = _BoardFilter.member),
-                  ),
-                  ChoiceChip(
-                    label: Text(context.tr('all')),
-                    selected: _filter == _BoardFilter.all,
-                    onSelected: (_) => setState(() => _filter = _BoardFilter.all),
-                  ),
-                ],
-              ),
+              mineLabel: context.tr('myBoards'),
+              memberLabel: context.tr('memberBoards'),
+              allLabel: context.tr('all'),
+              isMineSelected: _filter == _BoardFilter.mine,
+              isMemberSelected: _filter == _BoardFilter.member,
+              isAllSelected: _filter == _BoardFilter.all,
+              onMineSelected: () => setState(() => _filter = _BoardFilter.mine),
+              onMemberSelected: () => setState(() => _filter = _BoardFilter.member),
+              onAllSelected: () => setState(() => _filter = _BoardFilter.all),
             ),
           ),
         ),
@@ -397,10 +371,12 @@ class _BoardListContentState extends ConsumerState<_BoardListContent> {
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
                   final b = filteredBoards[index];
+                  final isMyBoard = _isMyBoard(b, myUserId);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: _BoardTile(
                       board: b,
+                      isMyBoard: isMyBoard,
                       onTap: () => CustomNavigationUtil.to(
                         context,
                         BoardDetailScreen(boardId: b.id, title: b.title, ownerId: b.ownerId),
@@ -420,14 +396,21 @@ class _BoardListContentState extends ConsumerState<_BoardListContent> {
 enum _BoardFilter { mine, member, all }
 
 class _BoardTile extends StatelessWidget {
-  const _BoardTile({required this.board, required this.onTap});
+  const _BoardTile({
+    required this.board,
+    required this.isMyBoard,
+    required this.onTap,
+  });
 
   final BoardItem board;
+  final bool isMyBoard;
   final VoidCallback onTap;
 
+  /// 보드 유형(내 보드/참여 보드)별 컬러 토큰을 적용해 카드를 렌더링한다.
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
+    final borderColor = isMyBoard ? p.boardMineBorder : p.boardMemberBorder;
 
     return Material(
       color: Colors.transparent,
@@ -439,12 +422,12 @@ class _BoardTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: p.cardBackground,
             borderRadius: ConfigUI.cardRadius,
-            border: Border.all(color: p.borderBrutal, width: ConfigUI.borderWidthBrutal),
-            boxShadow: ConfigUI.shadowOffsetBrutalCard(p.borderBrutal),
+            border: Border.all(color: borderColor, width: ConfigUI.borderWidthBrutal),
+            boxShadow: ConfigUI.shadowOffsetBrutalCard(borderColor),
           ),
           child: Row(
             children: [
-              Icon(Icons.dashboard, color: p.primary, size: 28),
+              Icon(Icons.dashboard, color: borderColor, size: 28),
               const SizedBox(width: 16),
               Expanded(
                 child: Text(
@@ -456,7 +439,7 @@ class _BoardTile extends StatelessWidget {
                   ),
                 ),
               ),
-              Icon(Icons.chevron_right, color: p.textSecondary),
+              Icon(Icons.chevron_right, color: borderColor),
             ],
           ),
         ),

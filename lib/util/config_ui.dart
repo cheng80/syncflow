@@ -17,6 +17,9 @@ class ConfigUI {
   /// 포커스 링 두께 (키보드/스위치 포커스 가시성)
   static const double focusBorderWidth = 2.0;
 
+  /// 태블릿 레이아웃 기준 (shortestSide)
+  static const double tabletBreakpoint = 600.0;
+
   // ─── Neo-Brutalism: 두꺼운 보더·오프셋 쉐도우 ─────────────────────────
   /// 카드/버튼/입력 보더 두께 (2~3px)
   static const double borderWidthBrutal = 3.0;
@@ -98,6 +101,34 @@ class ConfigUI {
   static const double inputPaddingH = 12.0;
   static const double inputPaddingV = 8.0;
 
+  // ─── 보드 리스트 화면 공통 규격 ───────────────────────────────────────
+  static const double boardListActionButtonHeightPhone = minTouchTarget;
+  static const double boardListActionButtonHeightTablet = 52.0;
+  static const double boardListActionButtonPaddingHPhone = 16.0;
+  static const double boardListActionButtonPaddingVPhone = 10.0;
+  static const double boardListActionButtonPaddingHTablet = 18.0;
+  static const double boardListActionButtonPaddingVTablet = 12.0;
+  static const double boardListActionButtonGap = 8.0;
+  static const double boardListFilterChipGap = 8.0;
+
+  static bool isTabletLayout(BuildContext context) =>
+      MediaQuery.of(context).size.shortestSide >= tabletBreakpoint;
+
+  static double boardListActionButtonHeight(BuildContext context) =>
+      isTabletLayout(context)
+          ? boardListActionButtonHeightTablet
+          : boardListActionButtonHeightPhone;
+
+  static EdgeInsets boardListActionButtonPadding(BuildContext context) =>
+      EdgeInsets.symmetric(
+        horizontal: isTabletLayout(context)
+            ? boardListActionButtonPaddingHTablet
+            : boardListActionButtonPaddingHPhone,
+        vertical: isTabletLayout(context)
+            ? boardListActionButtonPaddingVTablet
+            : boardListActionButtonPaddingVPhone,
+      );
+
   // ─── 타이포 (선택 사용) ───────────────────────────────────────────────
   static const double fontSizeTitle = 24.0;
   static const double fontSizeAppBar = 20.0;
@@ -113,4 +144,12 @@ class ConfigUI {
   static const int cardTitleMaxLength = 80;
   static const int cardDescriptionMaxLength = 4000;
   static const int cardDescriptionMaxLines = 100;
+
+  // ─── 보드 상세: 카드 생성 시트 규격 ───────────────────────────────────
+  /// 새 카드 생성 바텀시트 최대 높이 비율 (화면 대비)
+  static const double addCardSheetMaxHeightFactor = 0.82;
+  /// 새 카드 설명 입력 기본 표시 줄 수
+  static const int addCardDescriptionMinLines = 8;
+  /// 새 카드 설명 입력 최대 표시 줄 수 (내부 스크롤 시작 전)
+  static const int addCardDescriptionMaxVisibleLines = 14;
 }

@@ -1,5 +1,12 @@
 // main_scaffold.dart
 // 메인 스캐폴드 - 홈 화면 표시
+//
+// [구조 하이라키]
+// MainScaffold
+// └─ _MainScaffoldState
+//    ├─ Showcase 튜토리얼 제어
+//    ├─ AppDrawer / BoardListScreen 조립
+//    └─ _InAppReviewTrigger(리뷰 트리거 래퍼)
 
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +34,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
 
   bool _showcaseRegistered = false;
 
+  /// 튜토리얼 키를 준비하고 첫 프레임 이후 시작 가능성을 점검한다.
   @override
   void initState() {
     super.initState();
@@ -34,6 +42,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeStartTutorial());
   }
 
+  /// 로컬라이제이션/Showcase 컨텍스트가 준비되면 튜토리얼 등록을 1회 수행한다.
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -73,6 +82,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     );
   }
 
+  /// 튜토리얼 미완료 사용자에게 Drawer 포함 Showcase를 시작한다.
   Future<void> _maybeStartTutorial() async {
     if (AppStorage.getTutorialCompleted() || !mounted) return;
 
@@ -86,6 +96,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     ShowcaseView.get().startShowCase(_tutorialKeys.all);
   }
 
+  /// 사용자 요청 시 튜토리얼을 처음부터 다시 시작한다.
   void _restartTutorial() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
@@ -102,6 +113,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     });
   }
 
+  /// 등록한 Showcase 리소스를 해제한다.
   @override
   void dispose() {
     if (_showcaseRegistered) {
@@ -110,6 +122,7 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
     super.dispose();
   }
 
+  /// 메인 스캐폴드(드로어/앱바/보드 목록)를 렌더링한다.
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
@@ -162,6 +175,7 @@ class _InAppReviewTrigger extends StatefulWidget {
 class _InAppReviewTriggerState extends State<_InAppReviewTrigger> {
   static bool _triggeredThisSession = false;
 
+  /// 세션당 1회만 인앱 리뷰 요청 체크를 실행한다.
   @override
   void initState() {
     super.initState();
