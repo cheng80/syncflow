@@ -17,7 +17,7 @@
 
 ---
 
-## 주요 기능 (MVP)
+## 주요 기능
 
 | 기능 | 설명 |
 |------|------|
@@ -29,6 +29,8 @@
 | Soft Lock | 카드 편집 중 동시 편집 방지 (TTL 30초) |
 | Presence | 보드 접속 사용자 아바타 표시 |
 | 멤버 초대 | 6자리 초대 코드로 보드 참가 |
+| 테마 | 라이트/다크/시스템, 영속화 |
+| 다국어 | ko, en, ja, zh-CN, zh-TW |
 
 ---
 
@@ -40,8 +42,42 @@
 | 상태 관리 | Riverpod 3.0+ | Provider/Notifier 직접 구현 |
 | 백엔드 | FastAPI | REST API, WebSocket |
 | DB | MySQL | users, sessions, boards, columns, cards |
-| 설정 | GetStorage, FlutterSecureStorage | 테마 등, 세션 토큰 |
+| 설정 | GetStorage | 테마·언어·wakelock 등 |
+| 세션 | FlutterSecureStorage | 세션 토큰 암호화 저장 |
 | UI | Neo-Brutalism | 강한 대비, 두꺼운 보더, 오프셋 쉐도우 |
+
+---
+
+## 사용 패키지
+
+| 패키지 | 버전 | 용도 |
+|--------|------|------|
+| **상태·UI** | | |
+| flutter_riverpod | ^3.2.0 | 상태 관리 (보드, 카드, 세션) |
+| **로컬 저장소** | | |
+| get_storage | ^2.1.1 | 경량 설정 (테마, 튜토리얼, wakelock) |
+| flutter_secure_storage | ^9.2.4 | 세션 토큰 암호화 저장 |
+| **네트워크** | | |
+| http | ^1.1.0 | REST API (ApiClient) |
+| web_socket_channel | ^3.0.1 | WebSocket 실시간 동기화 |
+| **다국어** | | |
+| easy_localization | ^3.0.8 | 5개 언어 (ko, en, ja, zh-CN, zh-TW) |
+| intl | ^0.20.2 | 날짜 포맷 |
+| **기타** | | |
+| showcaseview | ^5.0.1 | 튜토리얼/온보딩 스포트라이트 |
+| in_app_review | ^2.0.11 | 스토어 평점 요청 팝업 |
+| flutter_markdown_plus | ^1.0.3 | 카드 설명 마크다운 렌더링 |
+| markdown | ^7.3.0 | 마크다운 파싱 |
+| wakelock_plus | ^1.4.0 | 화면 꺼짐 방지 |
+| package_info_plus | ^9.0.0 | 앱 버전 표시 (Drawer) |
+
+**dev_dependencies**
+
+| 패키지 | 용도 |
+|--------|------|
+| flutter_lints | 린트 규칙 |
+| flutter_launcher_icons | 앱 아이콘 생성 |
+| flutter_native_splash | 스플래시 화면 생성 |
 
 ---
 
@@ -57,8 +93,8 @@ lib/
 ├── vm/          # Handler(API), Notifier(Riverpod)
 ├── service/     # api_client, ws_service, in_app_review_service
 ├── widget/      # card_tile, card_detail_modal, column_header, presence_avatars
-├── theme/
-├── util/
+├── theme/       # AppThemeColors, ConfigUI
+├── util/        # common_util, config_ui, app_storage
 ├── navigation/
 └── json/
 ```
@@ -72,9 +108,44 @@ fastapi/app/
 └── utils/
 ```
 
-- **Handler**: API 접근 전담
-- **Notifier**: Riverpod 상태 관리
-- **View**: UI만, `ref.watch`/`ref.read`로 상태 구독·액션 호출
+- **View**: UI 렌더링만. `ref.watch`로 상태 구독, `ref.read`로 액션 호출
+- **Handler**: API 접근 전담 (BoardHandler, CardHandler)
+- **Notifier**: Riverpod 상태 관리 (boardDetailProvider, sessionNotifier 등)
+- **테마**: `AppThemeColors` + `context.appTheme` + `ConfigUI` (Neo-Brutalism)
+- **다국어**: `easy_localization` + `assets/translations/`. Drawer에서 언어 선택
+
+### 시스템 구성도
+
+![System Diagram](docs/system/System_Diagram.png)
+
+> PNG 생성: `plantuml docs/system/system.puml`
+
+### 데이터 모델 (ERD)
+
+![ERD](docs/erd/ERD.png)
+
+> Mermaid 소스: [docs/erd/erDiagram.mmd](docs/erd/erDiagram.mmd)
+
+---
+
+## 버전 관리
+
+앱 버전은 `pubspec.yaml`의 `version`에서 관리한다. (상세: [docs/DRAWER_AND_VERSION_GUIDE.md](docs/DRAWER_AND_VERSION_GUIDE.md))
+
+```yaml
+version: 1.0.0+1   # 1.0.0 = 버전명(사용자 노출), +1 = 빌드 번호(스토어 구분)
+```
+
+| 구분 | 설명 |
+|------|------|
+| 버전명 | 사용자에게 표시 (Drawer 푸터, 스토어). 예: 1.0.0 → 1.0.1 |
+| 빌드 번호 | 스토어 업로드 시 이전보다 커야 함. 예: +1 → +2 |
+
+**빌드 시 오버라이드**:
+```bash
+flutter build appbundle --release --build-name 1.0.1 --build-number 2
+flutter build ios --release --build-name 1.0.1 --build-number 2
+```
 
 ---
 
@@ -114,22 +185,6 @@ const String? customApiBaseUrl = 'http://your-server.com:8000';
 
 ---
 
-## 구현 단계 (Phase)
-
-| Phase | 내용 | 상태 |
-|-------|------|------|
-| **0** | 기존 코드 제거, 프로젝트 초기 설정 | 완료 |
-| **1** | 계정 및 인증 | 완료 |
-| **2** | 보드 목록 및 생성 | 완료 |
-| **3** | 보드 상세 및 카드 CRUD | 완료 |
-| **4** | WebSocket 실시간 동기화 | 완료 |
-| **5** | Soft Lock 및 Owner Lock | 완료 |
-| **6** | 멤버 초대, 컬럼 편집 등 | 완료 |
-
-상세: [docs/PLAN_BASIC_STRUCTURE.md](docs/PLAN_BASIC_STRUCTURE.md)
-
----
-
 ## WebSocket 연결 오류 (프록시/리버스 프록시)
 
 `WebSocketException: Connection was not upgraded to websocket` 발생 시:
@@ -162,3 +217,4 @@ location /ws {
 | [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 앱 스토어 출시 체크리스트 |
 | [docs/DRAWER_AND_VERSION_GUIDE.md](docs/DRAWER_AND_VERSION_GUIDE.md) | Drawer, 버전 표시 |
 | [docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md](docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md) | 튜토리얼 화면 |
+| [docs/system/README.md](docs/system/README.md) | 시스템 구성도 설명 |

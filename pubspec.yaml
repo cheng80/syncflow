@@ -82,27 +82,28 @@ dev_dependencies:
   # 앱 시작 화면 생성 도구
   flutter_native_splash: ^2.4.6
 
-# 앱 아이콘 (assets/icon.png)
+# 앱 아이콘 (docs/icon_splash/icon.png)
 flutter_launcher_icons:
-  image_path: assets/icon.png
+  image_path: docs/icon_splash/icon.png
   android: true
   ios: true
   remove_alpha_ios: true
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: assets/icon.png
+  adaptive_icon_foreground: docs/icon_splash/icon.png
 
 
 #Flutter Native Splash 세팅 <<<<<<<<<<<<
 
 flutter_native_splash:
   color: "#ffffff"
-  image: assets/splash.png
+  image: docs/icon_splash/splash.png
   # android: true
   # ios: true
   # web: false
 
   android_12:
-    image: assets/splash.png
+    # Android 12+는 시스템 원형 마스크가 강제되어 이미지가 원형 크롭됩니다.
+    # 원형 크롭을 피하려면 Android 12에서는 이미지를 사용하지 않고 배경색만 사용합니다.
     color: "#ffffff"
 
 #Flutter Native Splash 세팅 끝 >>>>>>>>>>

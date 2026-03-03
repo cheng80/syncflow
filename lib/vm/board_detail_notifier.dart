@@ -73,6 +73,10 @@ final presenceMembersProvider =
 final cardLocksProvider =
     StateProvider.family<Map<int, CardLockState>, int>((ref, boardId) => const {});
 
+/// 보드 제목 실시간 오버라이드 (BOARD_UPDATED WebSocket 반영용)
+final boardTitleOverrideProvider =
+    StateProvider.family<String?, int>((ref, boardId) => null);
+
 /// 서버 데이터 + 낙관적 이동을 합친 카드 목록
 List<CardItem> mergeCardsWithOptimistic(
   List<CardItem> cards,

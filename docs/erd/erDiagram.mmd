@@ -24,10 +24,19 @@ erDiagram
         datetime updated_at
     }
 
+    email_verifications {
+        bigint id PK
+        varchar email
+        char code_hash "64"
+        datetime expires_at
+        int attempt_count
+        datetime created_at
+    }
+
     sessions {
         bigint id PK
         bigint user_id FK
-        char session_token "UUID4(36) UNIQUE"
+        char session_token "36 UNIQUE"
         datetime expires_at
         boolean revoked
         datetime created_at
@@ -36,7 +45,7 @@ erDiagram
     boards {
         bigint id PK
         bigint owner_id FK
-        varchar title
+        varchar title "255"
         json template_json
         datetime created_at
         datetime updated_at
@@ -53,7 +62,7 @@ erDiagram
     columns {
         bigint id PK
         bigint board_id FK
-        varchar title
+        varchar title "100"
         int position
         boolean is_done
         datetime created_at
@@ -64,19 +73,16 @@ erDiagram
         bigint id PK
         bigint board_id FK
         bigint column_id FK
-        varchar title
+        varchar title "255"
         text description
         varchar priority "low|medium|high"
         bigint assignee_id FK
         datetime due_date
-
         varchar status "active|done|archived"
         int position
-
         boolean owner_lock
         bigint owner_lock_by FK
         datetime owner_lock_at
-
         datetime updated_at
         bigint updated_by FK
         datetime created_at
@@ -86,7 +92,7 @@ erDiagram
     board_invites {
         bigint id PK
         bigint board_id FK
-        varchar code "UNIQUE"
+        varchar code "16 UNIQUE"
         bigint created_by FK
         datetime expires_at
         int max_uses

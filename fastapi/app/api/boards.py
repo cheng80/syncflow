@@ -402,9 +402,18 @@ async def update_board(
                 (req.title.strip(), board_id),
             )
             conn.commit()
-            return {"id": board_id, "title": req.title.strip(), "owner_id": owner_id}
+            result = {"id": board_id, "title": req.title.strip(), "owner_id": owner_id}
     finally:
         conn.close()
+
+    await broadcast_to_board(
+        board_id,
+        {
+            "type": "BOARD_UPDATED",
+            "data": {"board_id": board_id, "title": req.title.strip()},
+        },
+    )
+    return result
 
 
 @router.delete("/{board_id}")

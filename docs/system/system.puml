@@ -1,4 +1,4 @@
-@startuml HabitCell System Architecture
+@startuml SyncFlow System Architecture
 
 ' ================== 레이아웃 ==================
 left to right direction
@@ -22,25 +22,22 @@ skinparam rectangle {
 }
 
 ' ================== APP ==================
-rectangle "📱 APP\n\n**HabitCell**\n\nFlutter\nState Management:\n**Riverpod**" as App #E8F4FD
+rectangle "📱 APP\n\n**SyncFlow**\n\nFlutter\nState Management:\n**Riverpod**" as App #E8F4FD
 
 ' ================== LOCAL STORAGE ==================
-database "SQLite\n(sqflite)\n\nhabitcell.db\n- categories\n- habits\n- habit_daily_logs\n- heatmap_daily_snapshots" as SQLite #E8F8F5
+rectangle "⚙️ GetStorage\n\n- theme_mode\n- locale\n- wakelock\n- tutorial_done" as Storage #FDEDEC
 
-rectangle "⚙️ GetStorage\n\n- device_uuid\n- theme_mode\n- locale\n- auto_backup\n- last_backup_at\n- wakelock" as Storage #FDEDEC
-
-rectangle "🔔 Notification\n\n- flutter_local_notifications\n- app_badge_plus\n- Pre-reminder\n- Deadline 알림" as Notif #FFF3E0
+rectangle "🔐 SecureStorage\n\n- session_token" as SecureStorage #E8F5E9
 
 ' ================== BACKEND ==================
-rectangle "☁️ FastAPI\n\n/v1/backups\n/v1/recovery" as API #E8F5E9
+rectangle "☁️ FastAPI\n\nREST:\n/v1/auth\n/v1/boards\n/v1/cards\n\nWebSocket:\n/ws" as API #E8F5E9
 
-database "MySQL\n\nhabitcell_db\n- devices\n- backups\n- email_verifications" as MySQL #E3F2FD
+database "MySQL\n\nsyncflow_db\n- users\n- email_verifications\n- sessions\n- boards\n- board_members\n- columns\n- cards\n- board_invites" as MySQL #E3F2FD
 
 ' ================== 연결 ==================
-App --> SQLite : CRUD\n(HabitDatabaseHandler)
 App --> Storage : Preferences\n(AppStorage)
-App --> Notif : Schedule/Cancel\n(NotificationService)
-App --> API : Backup/Restore\n(BackupService)
+App --> SecureStorage : Session Token\n(SessionSecureStorage)
+App --> API : REST + WebSocket\n(ApiClient, WsService)
 API --> MySQL : CRUD
 
 @enduml
