@@ -61,6 +61,10 @@ final boardDetailCacheProvider =
 final boardVersionProvider =
     StateProvider.family<int?, int>((ref, boardId) => null);
 
+/// 컬럼별 마지막 CARD_MOVED 적용 시각(ms epoch)
+final lastAppliedMoveEventAtProvider =
+    StateProvider.family<Map<int, int>, int>((ref, boardId) => const {});
+
 /// 보드별 접속자 목록 (WebSocket presence 이벤트 반영)
 final presenceMembersProvider =
     StateProvider.family<List<PresenceMember>, int>((ref, boardId) => const []);

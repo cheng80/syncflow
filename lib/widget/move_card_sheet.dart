@@ -81,23 +81,28 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
     try {
       final ws = ref.read(wsServiceProvider);
       if (ws.isConnected) {
+        final targetColumnId = _selectedColumnId!;
+        final detail = ref.read(boardDetailCacheProvider(widget.boardId)) ??
+            ref.read(boardDetailProvider(widget.boardId)).value;
+        final targetCards = (detail?.cards ?? const <CardItem>[])
+            .where((c) => c.columnId == targetColumnId)
+            .toList()
+          ..sort((a, b) => a.position.compareTo(b.position));
+        final topCardId = targetCards.isNotEmpty ? targetCards.first.id : null;
+        final optimisticPosition = targetCards.isNotEmpty ? targetCards.first.position - 1 : 0;
         final reqId = 'move_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
         await ws.moveCard(
           boardId: widget.boardId,
           cardId: widget.card.id,
-          toColumnId: _selectedColumnId!,
-          afterCardId: null,
+          toColumnId: targetColumnId,
+          afterCardId: topCardId,
           reqId: reqId,
         );
-        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = {
-          ...ref.read(pendingMoveReqIdsProvider(widget.boardId)),
-          reqId,
-        };
         ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = {
           ...ref.read(optimisticCardMovesProvider(widget.boardId)),
           widget.card.id: OptimisticCardMove(
-            columnId: _selectedColumnId!,
-            position: 0,
+            columnId: targetColumnId,
+            position: optimisticPosition,
           ),
         };
       } else {
@@ -109,10 +114,10 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
           columnId: _selectedColumnId!,
           position: 0,
         );
+        widget.onRefresh();
       }
       if (mounted) {
         CustomNavigationUtil.back(context);
-        widget.onRefresh();
       }
     } on ApiException catch (e) {
       if (mounted) {

@@ -457,7 +457,27 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
     if (bid != widget.boardId) return;
     final incomingVersion = (data['board_version'] as num?)?.toInt();
     final currentVersion = ref.read(boardVersionProvider(widget.boardId));
-    if (incomingVersion != null && currentVersion != null && incomingVersion < currentVersion) {
+    final isCardMoved = type == 'CARD_MOVED';
+
+    if (isCardMoved) {
+      final columnId = (data['column_id'] as num?)?.toInt();
+      final incomingMovedAt = (data['updated_at'] as num?)?.toInt() ?? incomingVersion;
+      if (columnId != null && incomingMovedAt != null) {
+        final lastByColumn = ref.read(lastAppliedMoveEventAtProvider(widget.boardId));
+        final lastMovedAt = lastByColumn[columnId];
+        if (lastMovedAt != null && incomingMovedAt < lastMovedAt) {
+          debugPrint(
+            '[동기화] CARD_MOVED 구이벤트 무시: columnId=$columnId incoming=$incomingMovedAt last=$lastMovedAt',
+          );
+          return;
+        }
+      }
+    }
+
+    if (!isCardMoved &&
+        incomingVersion != null &&
+        currentVersion != null &&
+        incomingVersion < currentVersion) {
       debugPrint('[동기화] 구버전 이벤트 무시: incoming=$incomingVersion current=$currentVersion type=$type');
       return;
     }
@@ -521,6 +541,14 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
           final pendingReqIds = ref.read(pendingMoveReqIdsProvider(widget.boardId));
           if (pendingReqIds.isNotEmpty) {
             // 아직 ACK 대기 중인 이동이 있으면 낙관적 상태 유지
+            return;
+          }
+          // CARD_MOVED로 이미 더 최신 상태면 덮어쓰지 않음 (refetch 레이스 방지)
+          final current = ref.read(boardDetailCacheProvider(widget.boardId));
+          final newVersion = detail.boardVersion ?? 0;
+          final currentVersion = current?.boardVersion ?? 0;
+          if (current != null && newVersion < currentVersion) {
+            debugPrint('[동기화] refetch 스킵(캐시가 더 최신): new=$newVersion current=$currentVersion');
             return;
           }
           ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = detail;
@@ -650,9 +678,9 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
   }
 
   void _applyCardMoved(Map<String, dynamic> data) {
-    final cardId = data['card_id'] as int?;
-    final columnId = data['column_id'] as int?;
-    final position = data['position'] as int?;
+    final cardId = (data['card_id'] as num?)?.toInt();
+    final columnId = (data['column_id'] as num?)?.toInt();
+    final position = (data['position'] as num?)?.toInt();
     if (cardId == null || columnId == null || position == null) return;
 
     final current = ref.read(boardDetailCacheProvider(widget.boardId));
@@ -664,8 +692,8 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
     final order = (data['column_cards'] as List?)
         ?.whereType<Map>()
         .map((e) => {
-              'id': e['id'] as int?,
-              'position': e['position'] as int?,
+              'id': (e['id'] as num?)?.toInt(),
+              'position': (e['position'] as num?)?.toInt(),
             })
         .where((e) => e['id'] != null && e['position'] != null)
         .toList();
@@ -705,6 +733,27 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       cards: nextCards,
       boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
+
+    final movedAt = (data['updated_at'] as num?)?.toInt() ?? (data['board_version'] as num?)?.toInt();
+    if (movedAt != null) {
+      final byColumn = Map<int, int>.from(
+        ref.read(lastAppliedMoveEventAtProvider(widget.boardId)),
+      );
+      final currentMovedAt = byColumn[columnId];
+      if (currentMovedAt == null || movedAt >= currentMovedAt) {
+        byColumn[columnId] = movedAt;
+        ref.read(lastAppliedMoveEventAtProvider(widget.boardId).notifier).state = byColumn;
+      }
+    }
+
+    final confirmedIds = <int>{cardId, ...positionMap.keys};
+    if (confirmedIds.isNotEmpty) {
+      final optimistic = Map<int, OptimisticCardMove>.from(
+        ref.read(optimisticCardMovesProvider(widget.boardId)),
+      );
+      optimistic.removeWhere((id, _) => confirmedIds.contains(id));
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = optimistic;
+    }
   }
 
   void _applyCardUpdated(Map<String, dynamic> data) {
@@ -1579,7 +1628,9 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   @override
   void didUpdateWidget(_ColumnView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_listEquals(widget.cards, oldWidget.cards)) {
+    final changed = !_listEquals(widget.cards, oldWidget.cards);
+    debugPrint('[카드이동] didUpdateWidget col=${widget.column.id} changed=$changed');
+    if (changed) {
       _displayCards = List.from(widget.cards);
     }
   }
@@ -1717,6 +1768,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     final session = ref.read(sessionNotifierProvider).value;
     final userId = session?.userId ?? -1;
+    debugPrint('[카드이동] _onReorder START old=$oldIndex new=$newIndex cards=${_displayCards.length}');
 
     if (oldIndex >= _displayCards.length) {
       debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(범위초과, cards=${_displayCards.length})');
@@ -1746,6 +1798,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     );
     _displayCards = normalized;
     setState(() {}); // 즉시 UI 반영
+    debugPrint('[카드이동] _onReorder setState done order=${_displayCards.map((c) => '${c.id}:${c.position}').join(',')}');
     final newPosition = requestPosition;
     final affectedCardIds = normalized.map((c) => c.id).toSet();
 
