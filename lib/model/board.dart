@@ -3,6 +3,25 @@
 
 import 'package:flutter/material.dart';
 
+/// 보드 멤버 (멘션 선택용)
+class BoardMemberItem {
+  const BoardMemberItem({
+    required this.userId,
+    required this.email,
+    required this.display,
+  });
+
+  factory BoardMemberItem.fromJson(Map<String, dynamic> j) => BoardMemberItem(
+    userId: j['user_id'] as int,
+    email: (j['email'] as String?) ?? '',
+    display: (j['display'] as String?) ?? '',
+  );
+
+  final int userId;
+  final String email;
+  final String display;
+}
+
 /// 보드 목록 항목
 class BoardItem {
   const BoardItem({

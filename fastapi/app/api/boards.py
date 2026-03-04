@@ -453,6 +453,57 @@ async def delete_board(
         conn.close()
 
 
+def _to_display(email: str) -> str:
+    """이메일 → 표시용 (local@domain_head). 동일 local 구분용."""
+    if "@" in email:
+        local, domain = email.split("@", 1)
+        domain_head = domain.split(".", 1)[0]
+        return f"{local}@{domain_head}"
+    return email
+
+
+@router.get("/{board_id}/members")
+async def list_board_members(
+    board_id: int,
+    user_id: int = Depends(get_current_user_id),
+):
+    """
+    보드 멤버 목록 (user_id, email, display)
+    멘션 선택 UI용. board_members에 있어야 접근 가능.
+    """
+    conn = connect_db()
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                (board_id, user_id),
+            )
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+
+            cursor.execute(
+                """
+                SELECT u.id, LOWER(u.email) AS email
+                FROM board_members bm
+                INNER JOIN users u ON u.id = bm.user_id
+                WHERE bm.board_id = %s
+                ORDER BY u.email
+                """,
+                (board_id,),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "user_id": r[0],
+                    "email": r[1] or "",
+                    "display": _to_display(r[1] or ""),
+                }
+                for r in rows
+            ]
+    finally:
+        conn.close()
+
+
 @router.get("/{board_id}")
 async def get_board_detail(
     board_id: int,

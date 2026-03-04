@@ -23,6 +23,9 @@ class BoardHandler {
   Future<BoardDetail> getBoardDetail(String sessionToken, int boardId) =>
       _client.getBoardDetail(sessionToken, boardId);
 
+  Future<List<BoardMemberItem>> listBoardMembers(String sessionToken, int boardId) =>
+      _client.listBoardMembers(sessionToken, boardId);
+
   Future<BoardItem> updateBoard(String sessionToken, int boardId, {required String title}) =>
       _client.updateBoard(sessionToken, boardId, title: title);
 

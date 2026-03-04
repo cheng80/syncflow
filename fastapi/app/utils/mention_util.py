@@ -4,7 +4,10 @@ from typing import Iterable
 import pymysql
 
 
-_MENTION_TOKEN_RE = re.compile(r"@([^\s@,;:(){}\[\]<>]+)")
+# @username 또는 @user@domain.com 형식 (이메일 내부 @는 하나의 멘션으로 유지)
+_MENTION_TOKEN_RE = re.compile(
+    r"@([^\s@,;:(){}\[\]<>]+@[^\s@,;:(){}\[\]<>]+|[^\s@,;:(){}\[\]<>]+)"
+)
 
 
 def extract_mention_tokens(*texts: str | None) -> list[str]:

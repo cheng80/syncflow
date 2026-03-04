@@ -106,6 +106,26 @@ class ApiClient {
     );
   }
 
+  /// GET /v1/boards/{id}/members - 보드 멤버 목록 (멘션 선택용)
+  Future<List<BoardMemberItem>> listBoardMembers(
+    String sessionToken,
+    int boardId,
+  ) async {
+    final res = await http.get(
+      Uri.parse(_url('/v1/boards/$boardId/members')),
+      headers: _authHeaders(sessionToken),
+    );
+    if (res.statusCode != 200) {
+      final body = CustomJsonUtil.toMap(res.body);
+      throw ApiException(body?['detail'] ?? '멤버 목록 조회 실패');
+    }
+    final list = CustomJsonUtil.fromJsonList<BoardMemberItem>(
+      res.body,
+      (j) => BoardMemberItem.fromJson(j),
+    );
+    return list ?? [];
+  }
+
   /// POST /v1/boards/{id}/invite - 초대 코드 생성 (owner만)
   Future<InviteResponse> createInvite(String sessionToken, int boardId) async {
     final res = await http.post(

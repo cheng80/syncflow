@@ -18,9 +18,11 @@ import 'package:syncflow/util/markdown_input_formatter.dart';
 import 'package:syncflow/vm/board_detail_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/vm/ws_service_notifier.dart';
+import 'package:syncflow/vm/board_handler.dart';
 import 'package:syncflow/widget/card_markdown_preview.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
 import 'package:syncflow/widget/markdown_help_dialog.dart';
+import 'package:syncflow/widget/mention_text_field.dart';
 
 /// 카드 상세 모달
 class CardDetailModal extends ConsumerStatefulWidget {
@@ -48,6 +50,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
   Timer? _lockRenewTimer;
   bool _lockOwner = false;
   String? _lockMessage;
+  List<BoardMemberItem> _members = [];
   static const _lockRenewInterval = Duration(seconds: 10);
 
   @override
@@ -59,7 +62,20 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     _status = widget.card.status;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryAcquireLock();
+      _loadMembers();
     });
+  }
+
+  Future<void> _loadMembers() async {
+    final token = ref.read(sessionNotifierProvider).value?.sessionToken;
+    if (token == null) return;
+    try {
+      final list = await ref.read(boardHandlerProvider).listBoardMembers(
+        token,
+        widget.boardId,
+      );
+      if (mounted) setState(() => _members = list);
+    } catch (_) {}
   }
 
   @override
@@ -193,9 +209,14 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     }
   }
 
+  /// @username 또는 @user@domain.com 형식의 멘션 매칭 (이메일 내부 @는 하나의 멘션으로 유지)
+  static final _mentionRegex = RegExp(
+    r'@([^\s@,;:(){}\[\]<>]+@[^\s@,;:(){}\[\]<>]+|[^\s@,;:(){}\[\]<>]+)',
+  );
+
   List<String> _detectedMentions() {
     final source = '${_titleController.text} ${_descController.text}';
-    final regex = RegExp(r'@([^\s@,;:(){}\[\]<>]+)');
+    final regex = _mentionRegex;
     final seen = <String>{};
     final result = <String>[];
     for (final m in regex.allMatches(source)) {
@@ -211,7 +232,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
 
   InlineSpan _buildMentionHighlightedText(String text, BuildContext context) {
     final p = context.appTheme;
-    final regex = RegExp(r'@([^\s@,;:(){}\[\]<>]+)');
+    final regex = _mentionRegex;
     final spans = <InlineSpan>[];
     var cursor = 0;
 
@@ -476,8 +497,10 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                             onChanged: (_) => setState(() {}),
                           ),
                           const SizedBox(height: 12),
-                          TextField(
+                          MentionTextField(
                             controller: _descController,
+                            boardId: widget.boardId,
+                            members: _members,
                             enabled: _lockMessage == null && !_loading,
                             maxLength: ConfigUI.cardDescriptionMaxLength,
                             maxLengthEnforcement: MaxLengthEnforcement.enforced,
