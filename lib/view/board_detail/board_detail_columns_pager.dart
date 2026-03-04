@@ -30,17 +30,35 @@ class _BoardColumnsView extends ConsumerStatefulWidget {
 /// 상태 필터: 전체 / 완료 / 미완료
 enum _StatusFilter { all, done, notDone }
 
+/// 담당자 필터: null=전체, -1=미지정, 양수=userId
+const int _assigneeFilterUnassigned = -1;
+
 class _BoardColumnsViewState extends ConsumerState<_BoardColumnsView> {
   late final PageController _pageController;
   int _currentIndex = 0;
   bool _mentionOnly = false;
   _StatusFilter _statusFilter = _StatusFilter.all;
+  int? _assigneeFilterId;
+  List<BoardMemberItem> _members = [];
 
   /// 페이지 컨트롤러를 초기화한다.
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadMembers());
+  }
+
+  Future<void> _loadMembers() async {
+    final token = ref.read(sessionNotifierProvider).value?.sessionToken;
+    if (token == null) return;
+    try {
+      final list = await ref.read(boardHandlerProvider).listBoardMembers(
+        token,
+        widget.boardId,
+      );
+      if (mounted) setState(() => _members = list);
+    } catch (_) {}
   }
 
   /// 컨트롤러 리소스를 해제한다.
@@ -145,19 +163,32 @@ class _BoardColumnsViewState extends ConsumerState<_BoardColumnsView> {
                         .where((c) => c.mentionedUserIds.contains(myUserId))
                         .toList()
                   : allInColumn;
+              if (_assigneeFilterId != null) {
+                if (_assigneeFilterId == _assigneeFilterUnassigned) {
+                  cards = cards.where((c) => c.assigneeId == null).toList();
+                } else {
+                  cards =
+                      cards.where((c) => c.assigneeId == _assigneeFilterId).toList();
+                }
+              }
               cards = _applyStatusFilter(cards);
               cards.sort((a, b) => a.position.compareTo(b.position));
               final cardsKey = cards
                   .map((c) => '${c.id}:${c.position}')
                   .join(',');
+              final assigneeKey = _assigneeFilterId?.toString() ?? 'all';
               return _ColumnView(
-                key: ValueKey('col_${col.id}_$cardsKey'),
+                key: ValueKey('col_${col.id}_${cardsKey}_$assigneeKey'),
                 column: col,
                 cards: cards,
                 columns: columns,
                 boardId: widget.boardId,
                 onRefresh: widget.onRefresh,
                 mentionOnlyMode: _mentionOnly,
+                members: _members,
+                assigneeFilterId: _assigneeFilterId,
+                onAssigneeFilterChanged: (id) =>
+                    setState(() => _assigneeFilterId = id),
               );
             },
           ),

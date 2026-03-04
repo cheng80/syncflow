@@ -303,6 +303,7 @@ class ApiClient {
   }
 
   /// PATCH /v1/cards/{id} - 카드 수정
+  /// [assigneeIdForPatch]: null이면 omit, 값이 있으면 전송. 담당자 해제 시 [includeAssigneeNull: true]와 함께 null 전달.
   Future<CardItem> updateCard(
     String sessionToken,
     int cardId, {
@@ -312,6 +313,8 @@ class ApiClient {
     String? priority,
     String? status,
     int? position,
+    int? assigneeIdForPatch,
+    bool includeAssigneeNull = false,
   }) async {
     final body = <String, dynamic>{};
     if (title != null) body['title'] = title;
@@ -320,6 +323,9 @@ class ApiClient {
     if (priority != null) body['priority'] = priority;
     if (status != null) body['status'] = status;
     if (position != null) body['position'] = position;
+    if (assigneeIdForPatch != null || includeAssigneeNull) {
+      body['assignee_id'] = assigneeIdForPatch;
+    }
     if (body.isEmpty) throw ApiException('수정할 항목이 없습니다.');
 
     final res = await http.patch(

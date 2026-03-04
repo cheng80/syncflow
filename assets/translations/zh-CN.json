@@ -75,6 +75,8 @@
   "cardTitle": "标题",
   "cardDescription": "描述",
   "cardStatusDone": "已完成",
+  "assignee": "负责人",
+  "assigneeNone": "未指定",
   "mentionInputHint": "可使用 @user 或 @email 进行提及。",
   "cardDoneMoveBlocked": "已完成卡片不可调整顺序。",
   "mentionOnlyFilter": "仅看提及",

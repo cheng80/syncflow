@@ -47,6 +47,7 @@ class UpdateCardRequest(BaseModel):
     priority: str | None = None
     status: str | None = None
     position: int | None = None  # 같은 컬럼 내 재정렬용
+    assignee_id: int | None = None  # 담당자 지정/해제 (null이면 해제)
 
 
 @router.post("")
@@ -117,6 +118,7 @@ async def create_card(
             "title": req.title.strip(),
             "description": req.description or "",
             "priority": priority,
+            "assignee_id": None,
             "status": "active",
             "position": position,
             "mentioned_user_ids": mentioned_user_ids,
@@ -187,10 +189,24 @@ async def update_card(
             if req.position is not None:
                 updates.append("position = %s")
                 params.append(req.position)
+            if "assignee_id" in req.model_fields_set:
+                aid = req.assignee_id
+                if aid:
+                    cursor.execute(
+                        "SELECT 1 FROM board_members WHERE board_id = %s AND user_id = %s",
+                        (board_id, aid),
+                    )
+                    if not cursor.fetchone():
+                        raise HTTPException(
+                            status_code=400,
+                            detail="담당자는 보드 멤버여야 합니다.",
+                        )
+                updates.append("assignee_id = %s")
+                params.append(aid)
 
             if not updates:
                 cursor.execute(
-                    "SELECT id, board_id, column_id, title, description, priority, status, position FROM cards WHERE id = %s",
+                    "SELECT id, board_id, column_id, title, description, priority, assignee_id, status, position FROM cards WHERE id = %s",
                     (card_id,),
                 )
                 r = cursor.fetchone()
@@ -206,8 +222,9 @@ async def update_card(
                     "title": r[3],
                     "description": r[4] or "",
                     "priority": r[5],
-                    "status": r[6],
-                    "position": r[7],
+                    "assignee_id": r[6],
+                    "status": r[7],
+                    "position": r[8],
                     "mentioned_user_ids": mentioned_user_ids,
                 }
 
@@ -237,7 +254,7 @@ async def update_card(
                     cursor.execute("UPDATE cards SET position = %s WHERE id = %s", (i * 1000, cid))
 
             cursor.execute(
-                "SELECT id, column_id, title, description, priority, status, position FROM cards WHERE id = %s",
+                "SELECT id, column_id, title, description, priority, assignee_id, status, position FROM cards WHERE id = %s",
                 (card_id,),
             )
             r = cursor.fetchone()
@@ -268,11 +285,14 @@ async def update_card(
                 "title": r[2],
                 "description": r[3] or "",
                 "priority": r[4],
-                "status": r[5],
-                "position": r[6],
+                "assignee_id": r[5],
+                "status": r[6],
+                "position": r[7],
                 "mentioned_user_ids": mentioned_user_ids,
             }
         patch = {}
+        if "assignee_id" in req.model_fields_set:
+            patch["assignee_id"] = result["assignee_id"]
         if req.title is not None:
             patch["title"] = result["title"]
         if req.description is not None:

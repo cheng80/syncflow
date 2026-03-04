@@ -75,6 +75,8 @@
   "cardTitle": "Title",
   "cardDescription": "Description",
   "cardStatusDone": "Done",
+  "assignee": "Assignee",
+  "assigneeNone": "Unassigned",
   "mentionInputHint": "Use @user or @email to mention a teammate.",
   "cardDoneMoveBlocked": "Done cards cannot be reordered.",
   "mentionOnlyFilter": "Mentions only",

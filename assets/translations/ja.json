@@ -75,6 +75,8 @@
   "cardTitle": "タイトル",
   "cardDescription": "説明",
   "cardStatusDone": "完了",
+  "assignee": "担当者",
+  "assigneeNone": "未割当",
   "mentionInputHint": "@user または @email 形式でメンションできます。",
   "cardDoneMoveBlocked": "完了カードは並び替えできません。",
   "mentionOnlyFilter": "メンションのみ",

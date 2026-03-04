@@ -51,6 +51,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
   bool _lockOwner = false;
   String? _lockMessage;
   List<BoardMemberItem> _members = [];
+  int? _assigneeId;
   static const _lockRenewInterval = Duration(seconds: 10);
 
   @override
@@ -60,6 +61,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     _titleController = TextEditingController(text: widget.card.title);
     _descController = TextEditingController(text: widget.card.description);
     _status = widget.card.status;
+    _assigneeId = widget.card.assigneeId;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryAcquireLock();
       _loadMembers();
@@ -178,6 +180,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                 ? ''
                 : _descController.text.trim(),
             'status': _status,
+            'assignee_id': _assigneeId,
           },
           reqId: reqId,
         );
@@ -195,6 +198,8 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                 ? ''
                 : _descController.text.trim(),
             status: _status,
+            assigneeIdForPatch: _assigneeId,
+            includeAssigneeNull: true,
           );
       widget.onRefresh();
       if (mounted) CustomNavigationUtil.back(context);
@@ -206,6 +211,80 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Widget _buildAssigneeRow(BuildContext context) {
+    final p = context.appTheme;
+    final selected = _assigneeId == null
+        ? context.tr('assigneeNone')
+        : _members
+                .where((m) => m.userId == _assigneeId)
+                .map((m) => m.display)
+                .firstOrNull ??
+            context.tr('assigneeNone');
+    return InkWell(
+      onTap: (_lockMessage != null || _loading)
+          ? null
+          : () => _showAssigneePicker(context),
+      borderRadius: ConfigUI.cardRadius,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          border: Border.all(color: p.divider),
+          borderRadius: ConfigUI.cardRadius,
+        ),
+        child: Row(
+          children: [
+            Text(
+              context.tr('assignee'),
+              style: TextStyle(
+                color: p.textSecondary,
+                fontSize: ConfigUI.fontSizeLabel,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                selected,
+                style: TextStyle(
+                  color: p.textPrimary,
+                  fontSize: ConfigUI.fontSizeBody,
+                ),
+              ),
+            ),
+            Icon(Icons.arrow_drop_down, color: p.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showAssigneePicker(BuildContext context) async {
+    const unassignSentinel = -1;
+    final chosen = await showModalBottomSheet<int?>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          children: [
+            ListTile(
+              title: Text(context.tr('assigneeNone')),
+              onTap: () => Navigator.pop(ctx, unassignSentinel),
+            ),
+            ..._members.map(
+              (m) => ListTile(
+                title: Text(m.display),
+                subtitle: m.display != m.email ? Text(m.email) : null,
+                onTap: () => Navigator.pop(ctx, m.userId),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) {
+      setState(() => _assigneeId = chosen == unassignSentinel ? null : chosen);
     }
   }
 
@@ -460,6 +539,8 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                             ),
                           ],
                           const SizedBox(height: 12),
+                          _buildAssigneeRow(context),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
                               Checkbox(

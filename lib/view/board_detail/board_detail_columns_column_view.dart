@@ -1,5 +1,68 @@
 part of 'package:syncflow/view/board_detail_screen.dart';
 // 단일 컬럼 뷰 + 카드 재정렬 + 카드 추가 시트
+
+/// 담당자 필터 드롭다운 (전체/미지정/멤버)
+class _AssigneeFilterDropdown extends StatelessWidget {
+  const _AssigneeFilterDropdown({
+    required this.members,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final List<BoardMemberItem> members;
+  final int? value;
+  final ValueChanged<int?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.appTheme;
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 120),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: p.cardBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: p.divider),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<int?>(
+          value: value,
+          isDense: true,
+          iconSize: 18,
+          isExpanded: true,
+          menuMaxHeight: 300,
+          menuWidth: 280,
+          items: [
+            DropdownMenuItem<int?>(
+              value: null,
+              child: Text(
+                context.tr('all'),
+                style: TextStyle(fontSize: ConfigUI.fontSizeLabel),
+              ),
+            ),
+            DropdownMenuItem<int?>(
+              value: _assigneeFilterUnassigned,
+              child: Text(
+                context.tr('assigneeNone'),
+                style: TextStyle(fontSize: ConfigUI.fontSizeLabel),
+              ),
+            ),
+            ...members.map(
+              (m) => DropdownMenuItem<int?>(
+                value: m.userId,
+                child: Text(
+                  m.display,
+                  style: TextStyle(fontSize: ConfigUI.fontSizeLabel),
+                ),
+              ),
+            ),
+          ],
+          onChanged: (v) => onChanged(v),
+        ),
+      ),
+    );
+  }
+}
 //
 // [구조 하이라키]
 // _ColumnView
@@ -21,6 +84,9 @@ class _ColumnView extends ConsumerStatefulWidget {
     required this.boardId,
     required this.onRefresh,
     this.mentionOnlyMode = false,
+    this.members = const [],
+    this.assigneeFilterId,
+    this.onAssigneeFilterChanged,
   });
 
   final ColumnItem column;
@@ -29,6 +95,9 @@ class _ColumnView extends ConsumerStatefulWidget {
   final int boardId;
   final VoidCallback onRefresh;
   final bool mentionOnlyMode;
+  final List<BoardMemberItem> members;
+  final int? assigneeFilterId;
+  final ValueChanged<int?>? onAssigneeFilterChanged;
 
   @override
   ConsumerState<_ColumnView> createState() => _ColumnViewState();
@@ -114,36 +183,64 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          margin: const EdgeInsets.symmetric(
-            horizontal: ConfigUI.screenPaddingH,
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: p.primary.withValues(alpha: 0.15),
-            borderRadius: ConfigUI.cardRadius,
-            border: Border.all(
-              color: p.borderBrutal,
-              width: ConfigUI.borderWidthBrutal,
-            ),
-          ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                widget.column.title,
-                style: TextStyle(
-                  fontSize: ConfigUI.fontSizeSubtitle,
-                  fontWeight: FontWeight.bold,
-                  color: p.textPrimary,
+              if (widget.onAssigneeFilterChanged != null) ...[
+                Text(
+                  context.tr('assignee'),
+                  style: TextStyle(
+                    fontSize: ConfigUI.fontSizeLabel,
+                    color: p.textSecondary,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                _AssigneeFilterDropdown(
+                  members: widget.members,
+                  value: widget.assigneeFilterId,
+                  onChanged: widget.onAssigneeFilterChanged!,
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: p.primary.withValues(alpha: 0.15),
+                    borderRadius: ConfigUI.cardRadius,
+                    border: Border.all(
+                      color: p.borderBrutal,
+                      width: ConfigUI.borderWidthBrutal,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        widget.column.title,
+                        style: TextStyle(
+                          fontSize: ConfigUI.fontSizeSubtitle,
+                          fontWeight: FontWeight.bold,
+                          color: p.textPrimary,
+                        ),
+                      ),
+                      const Spacer(),
+                      if (!widget.mentionOnlyMode)
+                        IconButton(
+                          icon: const Icon(Icons.add, size: 20),
+                          iconSize: 20,
+                          style: IconButton.styleFrom(
+                            padding: const EdgeInsets.all(8),
+                            minimumSize: const Size(36, 36),
+                          ),
+                          onPressed: _showAddCardDialog,
+                          tooltip: context.tr('cardAdd'),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-              const Spacer(),
-              if (!widget.mentionOnlyMode)
-                IconButton(
-                  icon: const Icon(Icons.add),
-                  onPressed: _showAddCardDialog,
-                  tooltip: context.tr('cardAdd'),
-                ),
             ],
           ),
         ),

@@ -37,6 +37,8 @@ class CardHandler {
     String? priority,
     String? status,
     int? position,
+    int? assigneeIdForPatch,
+    bool includeAssigneeNull = false,
   }) => _client.updateCard(
     sessionToken,
     cardId,
@@ -46,6 +48,8 @@ class CardHandler {
     priority: priority,
     status: status,
     position: position,
+    assigneeIdForPatch: assigneeIdForPatch,
+    includeAssigneeNull: includeAssigneeNull,
   );
 
   Future<void> archiveCard(String sessionToken, int cardId) =>

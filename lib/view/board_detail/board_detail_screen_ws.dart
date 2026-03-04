@@ -530,6 +530,11 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         status: patch.containsKey('status')
             ? (patch['status'] as String?)
             : null,
+        assigneeId: patch.containsKey('assignee_id')
+            ? (patch['assignee_id'] as num?)?.toInt()
+            : null,
+        clearAssigneeId:
+            patch.containsKey('assignee_id') && patch['assignee_id'] == null,
         mentionedUserIds: patch.containsKey('mentioned_user_ids')
             ? (patch['mentioned_user_ids'] as List?)
                       ?.map((e) => (e as num).toInt())
