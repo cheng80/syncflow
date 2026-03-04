@@ -50,11 +50,13 @@ class BoardDetailScreen extends ConsumerStatefulWidget {
     required this.boardId,
     required this.title,
     this.ownerId,
+    this.initialCardId,
   });
 
   final int boardId;
   final String title;
   final int? ownerId;
+  final int? initialCardId;
 
   @override
   ConsumerState<BoardDetailScreen> createState() => _BoardDetailScreenState();
@@ -62,12 +64,14 @@ class BoardDetailScreen extends ConsumerStatefulWidget {
 
 class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
   late String _title;
+  int? _pendingOpenCardId;
 
   /// 최초 진입 시 전달받은 제목으로 로컬 표시 제목을 초기화한다.
   @override
   void initState() {
     super.initState();
     _title = widget.title;
+    _pendingOpenCardId = widget.initialCardId;
   }
 
   /// 라우팅 교체 등으로 위젯 제목이 바뀌면 로컬 표시 제목도 동기화한다.
@@ -77,6 +81,45 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
     if (oldWidget.title != widget.title) {
       _title = widget.title;
     }
+    if (oldWidget.initialCardId != widget.initialCardId &&
+        widget.initialCardId != null) {
+      _pendingOpenCardId = widget.initialCardId;
+    }
+  }
+
+  void _tryOpenCardFromPush(BoardDetail detail, {required bool clearIfMissing}) {
+    final targetId = _pendingOpenCardId;
+    if (targetId == null) return;
+
+    CardItem? targetCard;
+    for (final card in detail.cards) {
+      if (card.id == targetId) {
+        targetCard = card;
+        break;
+      }
+    }
+
+    if (targetCard == null) {
+      if (clearIfMissing) {
+        _pendingOpenCardId = null;
+      }
+      return;
+    }
+
+    _pendingOpenCardId = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        useSafeArea: true,
+        builder: (ctx) => CardDetailModal(
+          card: targetCard!,
+          boardId: widget.boardId,
+          onRefresh: () => ref.invalidate(boardDetailProvider(widget.boardId)),
+        ),
+      );
+    });
   }
 
   /// 보드 상세 화면의 전체 조립 지점:
@@ -90,7 +133,7 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
     final detail = cachedDetail ?? detailAsync.value;
     final resolvedOwnerId = widget.ownerId ?? detail?.ownerId;
     final isOwner = resolvedOwnerId != null && session?.userId == resolvedOwnerId;
-    final displayTitle = titleOverride ?? _title;
+    final displayTitle = titleOverride ?? detail?.title ?? _title;
 
     return Scaffold(
       backgroundColor: context.appTheme.background,
@@ -124,6 +167,7 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
         loading: () {
           final prev = detail;
           if (prev != null && prev.columns.isNotEmpty) {
+            _tryOpenCardFromPush(prev, clearIfMissing: false);
             return _BoardWsBridge(
               boardId: widget.boardId,
               child: _BoardColumnsView(
@@ -155,6 +199,7 @@ class _BoardDetailScreenState extends ConsumerState<BoardDetailScreen> {
           if (effective == null || effective.columns.isEmpty) {
             return Center(child: Text(context.tr('boardLoadFailed')));
           }
+          _tryOpenCardFromPush(effective, clearIfMissing: true);
           return _BoardWsBridge(
             boardId: widget.boardId,
             child: _BoardColumnsView(

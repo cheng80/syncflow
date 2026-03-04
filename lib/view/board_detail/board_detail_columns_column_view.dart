@@ -119,9 +119,6 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   void didUpdateWidget(_ColumnView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final changed = !_listEquals(widget.cards, oldWidget.cards);
-    debugPrint(
-      '[카드이동] didUpdateWidget col=${widget.column.id} changed=$changed',
-    );
     if (changed) {
       _displayCards = List.from(widget.cards);
     }
@@ -395,24 +392,14 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   /// WS 우선 전송, 미연결 시 REST 폴백, 실패 시 롤백을 수행한다.
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     final session = ref.read(sessionNotifierProvider).value;
-    final userId = session?.userId ?? -1;
-    debugPrint(
-      '[카드이동] _onReorder START old=$oldIndex new=$newIndex cards=${_displayCards.length}',
-    );
 
     if (oldIndex >= _displayCards.length) {
-      debugPrint(
-        '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(범위초과, cards=${_displayCards.length})',
-      );
       return;
     }
     if (newIndex > _displayCards.length) {
       newIndex = _displayCards.length;
     }
     if (oldIndex == newIndex) {
-      debugPrint(
-        '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(동일위치)',
-      );
       return;
     }
     if (newIndex > oldIndex) newIndex--;
@@ -432,15 +419,8 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     );
     _displayCards = normalized;
     setState(() {}); // 즉시 UI 반영
-    debugPrint(
-      '[카드이동] _onReorder setState done order=${_displayCards.map((c) => '${c.id}:${c.position}').join(',')}',
-    );
     final newPosition = requestPosition;
     final affectedCardIds = normalized.map((c) => c.id).toSet();
-
-    debugPrint(
-      '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex | cardId=${movedCard.id} columnId=${widget.column.id} position=$newPosition',
-    );
 
     // 1. 낙관적 업데이트: 변경된 컬럼의 카드 전체를 일관된 순서로 반영
     final optimistic = Map<int, OptimisticCardMove>.from(
@@ -457,7 +437,6 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
 
     final ws = ref.read(wsServiceProvider);
     if (ws.isConnected) {
-      debugPrint('[카드이동] 사용자:$userId - WebSocket CARD_MOVE 전송');
       final reqId = _newMoveReqId(movedCard.id);
       ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = {
         ...ref.read(pendingMoveReqIdsProvider(widget.boardId)),
@@ -488,7 +467,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
         );
         // CARD_MOVED(req_id 동일) ACK 수신 시 _BoardWsBridge에서 invalidate → 서버 데이터로 확정
       } catch (e, st) {
-        debugPrint('[카드이동] 사용자:$userId - WebSocket 실패: $e\n$st');
+        debugPrint('[카드이동] WebSocket 실패: $e\n$st');
         if (mounted) {
           final pending = Set<String>.from(
             ref.read(pendingMoveReqIdsProvider(widget.boardId)),
@@ -520,7 +499,6 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     // WebSocket 미연결 시 REST API 폴백
     final token = session?.sessionToken;
     if (token == null) {
-      debugPrint('[카드이동] 사용자:$userId - REST 스킵(토큰없음)');
       final rollback = Map<int, OptimisticCardMove>.from(
         ref.read(optimisticCardMovesProvider(widget.boardId)),
       );
@@ -530,7 +508,6 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       widget.onRefresh();
       return;
     }
-    debugPrint('[카드이동] 사용자:$userId - REST API updateCard 호출');
     try {
       await ref
           .read(cardHandlerProvider)
@@ -546,10 +523,8 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       committed.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
       ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
           committed;
-      debugPrint('[카드이동] 사용자:$userId - REST 성공');
       widget.onRefresh();
     } on ApiException catch (e) {
-      debugPrint('[카드이동] 사용자:$userId - REST 실패: ${e.message}');
       if (mounted) {
         final rollback = Map<int, OptimisticCardMove>.from(
           ref.read(optimisticCardMovesProvider(widget.boardId)),
@@ -639,7 +614,6 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
         ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state =
             retryMap;
         try {
-          debugPrint('[카드이동] ACK 타임아웃 → 재전송(req_id=$reqId)');
           await sendMove();
           _scheduleMoveAckRetry(
             reqId: reqId,

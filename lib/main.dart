@@ -16,6 +16,7 @@ import 'package:syncflow/view/main_scaffold.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
+import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/vm/theme_notifier.dart';
 import 'package:syncflow/vm/fcm_notifier.dart';
 
@@ -51,46 +52,39 @@ void main() async {
 }
 
 Future<void> _main() async {
-  debugPrint('[main] start');
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   // Firebase 초기화 (실패 시에도 앱 진입 허용)
-  debugPrint('[main] before Firebase');
   try {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-    debugPrint('[main] Firebase initialized');
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (e) {
     debugPrint('[main] Firebase init failed (FCM disabled): $e');
   }
 
-  debugPrint('[main] before EasyLocalization');
   await EasyLocalization.ensureInitialized();
   await _initDateFormats();
-  debugPrint('[main] after _initDateFormats');
 
-  debugPrint('[main] before GetStorage.init');
   await GetStorage.init();
-  debugPrint('[main] after GetStorage.init');
 
   // iOS: Keychain은 앱 삭제 후에도 유지됨. GetStorage는 삭제됨.
   // hasAppLaunchedBefore 없음 = 재설치 → Secure Storage(세션) 초기화 → Android/iOS 동작 일치
   // iOS 실기기: flutter_secure_storage 첫 접근 시 hang 가능 → 타임아웃
-  debugPrint('[main] before SecureStorage block, hasLaunched=${AppStorage.hasAppLaunchedBefore}');
   try {
     if (!AppStorage.hasAppLaunchedBefore) {
-      debugPrint('[main] calling clearSession (first launch)...');
-      await SessionSecureStorage.clearSession()
-          .timeout(const Duration(seconds: 8), onTimeout: () {
-        debugPrint('[main] clearSession TIMEOUT');
-      });
-      debugPrint('[main] clearSession done');
+      await SessionSecureStorage.clearSession().timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          debugPrint('[main] clearSession TIMEOUT');
+        },
+      );
       await AppStorage.setAppHasLaunched();
     }
   } catch (e) {
     debugPrint('[main] SecureStorage block error: $e');
   }
-  debugPrint('[main] after SecureStorage block');
 
   // 첫 실행일 저장 (인앱 리뷰 조건용)
   if (AppStorage.getFirstLaunchDate() == null) {
@@ -149,6 +143,8 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      navigatorKey: rootNavigatorKey,
+      scaffoldMessengerKey: rootMessengerKey,
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,

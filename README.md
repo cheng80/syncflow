@@ -27,6 +27,7 @@
 | 카드 | 생성, 제목/설명 수정, 드래그 이동, 우선순위·담당자·마감일 |
 | 실시간 동기화 | WebSocket 기반 카드 이동/수정 즉시 반영 |
 | Soft Lock | 카드 편집 중 동시 편집 방지 (TTL 30초) |
+| 푸시 알림(FCM) | 멘션/담당자 변경 이벤트 푸시, 포그라운드 로컬 알림, 푸시 탭 딥링크(보드/카드) |
 | Presence | 보드 접속 사용자 아바타 표시 |
 | 멤버 초대 | 6자리 초대 코드로 보드 참가 |
 | 테마 | 라이트/다크/시스템, 영속화 |
@@ -41,9 +42,10 @@
 | 프론트엔드 | Flutter | iOS/Android/Web |
 | 상태 관리 | Riverpod 3.0+ | Provider/Notifier 직접 구현 |
 | 백엔드 | FastAPI | REST API, WebSocket |
-| DB | MySQL | users, sessions, boards, columns, cards |
+| DB | MySQL | users, sessions, boards, columns, cards, card_mentions, push_tokens |
 | 설정 | GetStorage | 테마·언어·wakelock 등 |
 | 세션 | FlutterSecureStorage | 세션 토큰 암호화 저장 |
+| 푸시 | Firebase Cloud Messaging | 디바이스 토큰 관리 + 이벤트 푸시 발송 |
 | UI | Neo-Brutalism | 강한 대비, 두꺼운 보더, 오프셋 쉐도우 |
 
 ---
@@ -56,10 +58,14 @@
 | flutter_riverpod | ^3.2.0 | 상태 관리 (보드, 카드, 세션) |
 | **로컬 저장소** | | |
 | get_storage | ^2.1.1 | 경량 설정 (테마, 튜토리얼, wakelock) |
-| flutter_secure_storage | ^9.2.4 | 세션 토큰 암호화 저장 |
+| flutter_secure_storage | 9.0.0 | 세션 토큰 암호화 저장 |
 | **네트워크** | | |
 | http | ^1.1.0 | REST API (ApiClient) |
 | web_socket_channel | ^3.0.1 | WebSocket 실시간 동기화 |
+| firebase_core | ^4.5.0 | Firebase 초기화 |
+| firebase_messaging | ^16.1.2 | FCM 토큰/메시지 수신 |
+| flutter_local_notifications | ^19.4.2 | 포그라운드 로컬 알림 표시 |
+| permission_handler | ^12.0.1 | 알림 권한 요청/상태 확인 |
 | **다국어** | | |
 | easy_localization | ^3.0.8 | 5개 언어 (ko, en, ja, zh-CN, zh-TW) |
 | intl | ^0.20.2 | 날짜 포맷 |
@@ -102,10 +108,11 @@ lib/
 ```
 fastapi/app/
 ├── main.py
-├── api/         # auth, boards, cards
+├── api/         # auth, boards, cards, push_tokens
 ├── ws/          # connection, handlers, room, lock
+├── utils/       # mention_util, push_service
 ├── database/
-└── utils/
+└── ...
 ```
 
 - **View**: UI 렌더링만. `ref.watch`로 상태 구독, `ref.read`로 액션 호출
@@ -119,12 +126,14 @@ fastapi/app/
 ![System Diagram](docs/system/System_Diagram.png)
 
 > PNG 생성: `plantuml docs/system/system.puml`
+> 현재 구현 반영 기준: FCM/PushToken/PushService 포함 (소스 갱신일 2026-03-05)
 
 ### 데이터 모델 (ERD)
 
 ![ERD](docs/erd/ERD.png)
 
 > Mermaid 소스: [docs/erd/erDiagram.mmd](docs/erd/erDiagram.mmd)
+> 현재 구현 반영 기준: `card_mentions`, `push_tokens` 포함 (소스 갱신일 2026-03-05)
 
 ---
 
@@ -217,4 +226,5 @@ location /ws {
 | [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) | 앱 스토어 출시 체크리스트 |
 | [docs/DRAWER_AND_VERSION_GUIDE.md](docs/DRAWER_AND_VERSION_GUIDE.md) | Drawer, 버전 표시 |
 | [docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md](docs/TUTORIAL_SHOWCASEVIEW_GUIDE.md) | 튜토리얼 화면 |
+| [docs/NEW-FCM구현 및 설정가이드/README.md](docs/NEW-FCM구현 및 설정가이드/README.md) | Riverpod 기반 FCM 전체 가이드 |
 | [docs/system/README.md](docs/system/README.md) | 시스템 구성도 설명 |

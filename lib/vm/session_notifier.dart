@@ -10,11 +10,7 @@ import 'package:syncflow/util/session_secure_storage.dart';
 
 /// 세션 상태
 class SessionState {
-  const SessionState({
-    this.sessionToken,
-    this.expiresAt,
-    this.userId,
-  });
+  const SessionState({this.sessionToken, this.expiresAt, this.userId});
 
   final String? sessionToken;
   final String? expiresAt;
@@ -40,23 +36,30 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
   @override
   Future<SessionState> build() async {
     if (kDebugMode) debugPrint('[SessionNotifier] build start');
-    final token = await SessionSecureStorage.getSessionToken()
-        .timeout(_storageTimeout, onTimeout: () {
-      if (kDebugMode) debugPrint('[SessionNotifier] getSessionToken TIMEOUT');
-      return null;
-    });
+    final token = await SessionSecureStorage.getSessionToken().timeout(
+      _storageTimeout,
+      onTimeout: () {
+        if (kDebugMode) debugPrint('[SessionNotifier] getSessionToken TIMEOUT');
+        return null;
+      },
+    );
     if (kDebugMode) debugPrint('[SessionNotifier] token done');
-    final expires = await SessionSecureStorage.getSessionExpiresAt()
-        .timeout(_storageTimeout, onTimeout: () {
-      if (kDebugMode) debugPrint('[SessionNotifier] getSessionExpiresAt TIMEOUT');
-      return null;
-    });
+    final expires = await SessionSecureStorage.getSessionExpiresAt().timeout(
+      _storageTimeout,
+      onTimeout: () {
+        if (kDebugMode)
+          debugPrint('[SessionNotifier] getSessionExpiresAt TIMEOUT');
+        return null;
+      },
+    );
     if (kDebugMode) debugPrint('[SessionNotifier] expires done');
-    var userId = await SessionSecureStorage.getUserId()
-        .timeout(_storageTimeout, onTimeout: () {
-      if (kDebugMode) debugPrint('[SessionNotifier] getUserId TIMEOUT');
-      return null;
-    });
+    var userId = await SessionSecureStorage.getUserId().timeout(
+      _storageTimeout,
+      onTimeout: () {
+        if (kDebugMode) debugPrint('[SessionNotifier] getUserId TIMEOUT');
+        return null;
+      },
+    );
     if (kDebugMode) debugPrint('[SessionNotifier] userId done');
     if (token != null && expires != null) {
       final dt = DateTime.tryParse(expires);
@@ -64,7 +67,11 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
         if (userId == null) {
           try {
             userId = await ApiClient().getMe(token);
-            await SessionSecureStorage.saveSession(token, expires, userId: userId);
+            await SessionSecureStorage.saveSession(
+              token,
+              expires,
+              userId: userId,
+            );
           } catch (_) {
             // /me 실패 시 userId 없이 진행 (초대 버튼 등 일부 기능 제한)
           }
@@ -76,16 +83,15 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
         );
       }
     }
+
     return const SessionState();
   }
 
   /// 로그인 성공 시 호출
   void setSession(String token, String expiresAt, int userId) {
-    state = AsyncData(SessionState(
-      sessionToken: token,
-      expiresAt: expiresAt,
-      userId: userId,
-    ));
+    state = AsyncData(
+      SessionState(sessionToken: token, expiresAt: expiresAt, userId: userId),
+    );
   }
 
   /// 로그아웃
@@ -135,8 +141,12 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
           token: fcmToken,
           platform: _currentPlatform(),
         );
+        debugPrint('[FCM][LOGIN_SYNC][OK] platform=${_currentPlatform()}');
+      } else {
+        debugPrint('[FCM][LOGIN_SYNC][SKIP] token is empty');
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[FCM][LOGIN_SYNC][FAIL] $e');
       // FCM 동기화 실패는 로그인 성공을 막지 않는다.
     }
   }

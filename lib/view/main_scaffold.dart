@@ -151,7 +151,10 @@ class _MainScaffoldState extends ConsumerState<MainScaffold> {
         ),
         title: Text(
           context.tr('board'),
-          style: TextStyle(color: p.textPrimary, fontSize: ConfigUI.fontSizeAppBar),
+          style: TextStyle(
+            color: p.textPrimary,
+            fontSize: ConfigUI.fontSizeAppBar,
+          ),
         ),
       ),
       body: _InAppReviewTrigger(

@@ -16,6 +16,12 @@ erDiagram
     users ||--o{ cards : "updated_by"
     users ||--o{ cards : "owner_lock_by"
 
+    boards ||--o{ card_mentions : "board_id"
+    cards ||--o{ card_mentions : "card_id"
+    users ||--o{ card_mentions : "mentioned_user_id"
+
+    users ||--o{ push_tokens : "user_id"
+
     users {
         bigint id PK
         varchar email "UNIQUE"
@@ -87,6 +93,28 @@ erDiagram
         bigint updated_by FK
         datetime created_at
         bigint created_by FK
+    }
+
+    card_mentions {
+        bigint id PK
+        bigint board_id FK
+        bigint card_id FK
+        bigint mentioned_user_id FK
+        varchar source_token
+        datetime created_at
+        datetime updated_at
+    }
+
+    push_tokens {
+        bigint id PK
+        bigint user_id FK
+        varchar platform "ios|android|web"
+        varchar token "UNIQUE(platform, token)"
+        varchar device_id
+        varchar app_version
+        boolean is_active
+        datetime created_at
+        datetime updated_at
     }
 
     board_invites {

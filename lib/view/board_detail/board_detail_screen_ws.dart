@@ -137,7 +137,10 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
           ref.read(cardLocksProvider(widget.boardId).notifier).state = locks;
         }
       }
-      if (mounted) {
+      final isLockReleaseFail = code == 'LOCKED' && message.contains('락 해제 실패');
+      if (isLockReleaseFail) {
+        debugPrint('[LOCK] $message');
+      } else if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(message)));
@@ -162,9 +165,6 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         );
         final lastMovedAt = lastByColumn[columnId];
         if (lastMovedAt != null && incomingMovedAt < lastMovedAt) {
-          debugPrint(
-            '[동기화] CARD_MOVED 구이벤트 무시: columnId=$columnId incoming=$incomingMovedAt last=$lastMovedAt',
-          );
           return;
         }
       }
@@ -174,9 +174,6 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         incomingVersion != null &&
         currentVersion != null &&
         incomingVersion < currentVersion) {
-      debugPrint(
-        '[동기화] 구버전 이벤트 무시: incoming=$incomingVersion current=$currentVersion type=$type',
-      );
       return;
     }
     if (incomingVersion != null &&
@@ -258,33 +255,14 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
           final newVersion = detail.boardVersion ?? 0;
           final currentVersion = current?.boardVersion ?? 0;
           if (current != null && newVersion < currentVersion) {
-            debugPrint(
-              '[동기화] refetch 스킵(캐시가 더 최신): new=$newVersion current=$currentVersion',
-            );
             return;
           }
           ref.read(boardDetailCacheProvider(widget.boardId).notifier).state =
               detail;
           ref.read(boardVersionProvider(widget.boardId).notifier).state =
               detail.boardVersion;
-          final hadMoves = ref
-              .read(optimisticCardMovesProvider(widget.boardId))
-              .isNotEmpty;
           ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
               {};
-          if (hadMoves) {
-            for (final col in detail.columns) {
-              final colCards =
-                  detail.cards.where((c) => c.columnId == col.id).toList()
-                    ..sort((a, b) => a.position.compareTo(b.position));
-              final cardsStr = colCards
-                  .map((c) => 'id:${c.id}:pos:${c.position}')
-                  .join(', ');
-              debugPrint(
-                '[카드이동] 서버 데이터 수신 → 낙관적 초기화 | columnId=${col.id} cards=$cardsStr',
-              );
-            }
-          }
         });
       }
     });

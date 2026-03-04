@@ -72,6 +72,7 @@ class _MentionTextFieldState extends State<MentionTextField> {
     final text = widget.controller.text;
     final offset = widget.controller.selection.baseOffset;
     if (offset < 0 || offset > text.length) return null;
+    if (offset == 0) return null;
 
     final atIndex = text.lastIndexOf('@', offset - 1);
     if (atIndex < 0) return null;
@@ -185,9 +186,27 @@ class _MentionOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
-    final height = (items.length.clamp(0, maxItems) * itemHeight)
-        .toDouble();
-    final top = position.dy + fieldSize.height + 4;
+    final desiredHeight = (items.length.clamp(0, maxItems) * itemHeight).toDouble();
+    final screenHeight = MediaQuery.of(context).size.height;
+    final keyboardInset = MediaQuery.of(context).viewInsets.bottom;
+    final keyboardTop = screenHeight - keyboardInset;
+
+    const margin = 8.0;
+    const gap = 4.0;
+    final belowTop = position.dy + fieldSize.height + gap;
+    final aboveTopBase = position.dy - gap;
+
+    final availableBelow = (keyboardTop - belowTop - margin).clamp(0.0, screenHeight);
+    final availableAbove = (aboveTopBase - margin).clamp(0.0, screenHeight);
+
+    final showBelow = availableBelow >= itemHeight || availableBelow >= availableAbove;
+    final maxHeight = showBelow ? availableBelow : availableAbove;
+    if (maxHeight <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    final height = desiredHeight.clamp(itemHeight, maxHeight).toDouble();
+    final top = showBelow ? belowTop : (position.dy - gap - height);
 
     return Stack(
       children: [

@@ -405,7 +405,11 @@ class ApiClient {
     );
     if (res.statusCode != 200) {
       final err = CustomJsonUtil.toMap(res.body);
-      throw ApiException(err?['detail'] ?? 'FCM 토큰 등록 실패');
+      final detail = err?['detail']?.toString();
+      throw ApiException(
+        detail ??
+            'FCM 토큰 등록 실패 (status=${res.statusCode}, body=${res.body})',
+      );
     }
   }
 
@@ -417,7 +421,11 @@ class ApiClient {
     );
     if (res.statusCode != 200) {
       final err = CustomJsonUtil.toMap(res.body);
-      throw ApiException(err?['detail'] ?? 'FCM 토큰 비활성화 실패');
+      final detail = err?['detail']?.toString();
+      throw ApiException(
+        detail ??
+            'FCM 토큰 비활성화 실패 (status=${res.statusCode}, body=${res.body})',
+      );
     }
   }
 }

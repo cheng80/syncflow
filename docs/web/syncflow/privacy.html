@@ -31,7 +31,7 @@
     <div class="page-header">
       <h1 data-ko="개인정보처리방침" data-en="Privacy Policy">개인정보처리방침</h1>
       <p class="subtitle" data-ko="Privacy Policy" data-en="개인정보처리방침">Privacy Policy</p>
-      <p class="effective-date" data-ko="시행일: 2026년 3월 3일 | 최종 수정일: 2026년 3월 3일" data-en="Effective: March 3, 2026 | Last Updated: March 3, 2026">시행일: 2026년 3월 3일 | 최종 수정일: 2026년 3월 3일</p>
+      <p class="effective-date" data-ko="시행일: 2026년 3월 3일 | 최종 수정일: 2026년 3월 5일" data-en="Effective: March 3, 2026 | Last Updated: March 5, 2026">시행일: 2026년 3월 3일 | 최종 수정일: 2026년 3월 5일</p>
     </div>
 
     <article class="content-card" data-ko-display>
@@ -55,6 +55,7 @@
               <tr><td>인증 관련 정보</td><td>인증 코드 요청/검증 기록</td><td>부정 로그인 방지, 보안 감사</td></tr>
               <tr><td>협업 데이터</td><td>보드/컬럼/카드 제목 및 내용, 정렬 정보</td><td>핵심 협업 기능 제공</td></tr>
               <tr><td>초대/멤버 정보</td><td>6자리 초대 코드, 보드 참여 정보</td><td>멤버 초대 및 접근 제어</td></tr>
+              <tr><td>푸시 토큰 정보</td><td>FCM 토큰, 플랫폼(iOS/Android), 앱 버전</td><td>멘션/담당자 변경 알림 발송 및 중복 방지</td></tr>
               <tr><td>기술 로그</td><td>접속 시간, 오류 로그, 기기/앱 버전</td><td>장애 대응, 서비스 품질 개선</td></tr>
             </tbody>
           </table>
@@ -108,9 +109,11 @@
             <thead><tr><th>항목</th><th>용도</th><th>필수 여부</th></tr></thead>
             <tbody>
               <tr><td>인터넷 연결</td><td>로그인, 실시간 동기화, 보드 데이터 전송</td><td>필수</td></tr>
+              <tr><td>알림 권한</td><td>멘션/담당자 변경 푸시 수신, 포그라운드 알림 표시</td><td>선택</td></tr>
             </tbody>
           </table>
         </div>
+        <p>알림 권한을 허용하지 않아도 기본 협업 기능은 사용할 수 있으나, 멘션/담당자 관련 실시간 알림 수신은 제한될 수 있습니다.</p>
         <p>카메라, 위치, 연락처 등 민감 권한은 서비스 핵심 기능 수행에 필수적이지 않습니다.</p>
       </section>
 
@@ -149,6 +152,7 @@
               <tr><td>Authentication data</td><td>Code request/verification logs</td><td>Fraud prevention and security audit</td></tr>
               <tr><td>Collaboration data</td><td>Board/column/card titles, content, ordering</td><td>Core collaboration functions</td></tr>
               <tr><td>Invite/member data</td><td>6-digit invite code, membership records</td><td>Member onboarding and access control</td></tr>
+              <tr><td>Push token data</td><td>FCM token, platform (iOS/Android), app version</td><td>Deliver mention/assignee alerts and prevent duplicates</td></tr>
               <tr><td>Technical logs</td><td>Access time, error logs, app/device version</td><td>Reliability and service quality improvement</td></tr>
             </tbody>
           </table>
@@ -202,9 +206,11 @@
             <thead><tr><th>Item</th><th>Purpose</th><th>Required</th></tr></thead>
             <tbody>
               <tr><td>Internet access</td><td>Login, real-time sync, board data transfer</td><td>Required</td></tr>
+              <tr><td>Notification permission</td><td>Mention/assignee push alerts and foreground notification display</td><td>Optional</td></tr>
             </tbody>
           </table>
         </div>
+        <p>You can use core collaboration features without notification permission, but real-time mention/assignee alerts may be limited.</p>
         <p>Sensitive permissions such as camera, location, and contacts are not essential to core service functions.</p>
       </section>
 

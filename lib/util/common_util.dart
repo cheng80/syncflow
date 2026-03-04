@@ -12,11 +12,11 @@ import 'package:syncflow/util/config_ui.dart';
 /// FastAPI 서버 기본 URL (커스텀 오버라이드)
 /// Windows + Android 에뮬레이터 사용자는 자신의 호스트 IP를 설정하세요
 /// 예: 'http://192.168.1.50:8000'
-/// null이면 플랫폼에 따라 자동 선택 (Android: 10.0.2.2, iOS: 127.0.0.1)
-// 로컬 개발: null → 127.0.0.1:8000
+/// 빈 문자열이면 플랫폼 기본값 사용 (Android: 10.0.2.2, iOS: 127.0.0.1)
+// 로컬 개발: '' → 127.0.0.1:8000
 // TODO 완료 후 점검 → 서버 업데이트 시 원격 URL로 변경
-const String? customApiBaseUrl = null;
-// const String? customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
+// const String? customApiBaseUrl = null;
+const String customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
 // const String? customApiBaseUrl = 'http://192.168.90.7:8000';
 
 /// 플랫폼별 기본 API Base URL 반환
@@ -33,12 +33,13 @@ String _getApiBaseUrlSync() {
 ///
 /// customApiBaseUrl이 설정되어 있으면 사용하고, 없으면 플랫폼에 따라 기본값 반환
 String getApiBaseUrl() {
-  if (customApiBaseUrl != null && customApiBaseUrl!.isNotEmpty) {
-    return customApiBaseUrl!;
-  }
   final runtimeOverride = AppStorage.getApiBaseUrlOverride();
   if (runtimeOverride != null && runtimeOverride.isNotEmpty) {
     return runtimeOverride;
+  }
+  final url = customApiBaseUrl;
+  if (url != null && url.isNotEmpty) {
+    return url;
   }
   return _getApiBaseUrlSync();
 }
@@ -75,7 +76,10 @@ Future<void> showApiBaseUrlSettingsSheet(BuildContext context) async {
           const SizedBox(height: 8),
           Text(
             '기본값: ${getDefaultApiBaseUrl()}',
-            style: TextStyle(color: p.textSecondary, fontSize: ConfigUI.fontSizeCaption),
+            style: TextStyle(
+              color: p.textSecondary,
+              fontSize: ConfigUI.fontSizeCaption,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -99,7 +103,8 @@ Future<void> showApiBaseUrlSettingsSheet(BuildContext context) async {
                   if (context.mounted) {
                     showCommonSnackBar(
                       context,
-                      message: 'API 주소를 기본값으로 복원했습니다: ${getDefaultApiBaseUrl()}',
+                      message:
+                          'API 주소를 기본값으로 복원했습니다: ${getDefaultApiBaseUrl()}',
                     );
                   }
                 },
@@ -122,7 +127,9 @@ Future<void> showApiBaseUrlSettingsSheet(BuildContext context) async {
                     }
                   }
 
-                  await AppStorage.setApiBaseUrlOverride(value.isEmpty ? null : value);
+                  await AppStorage.setApiBaseUrlOverride(
+                    value.isEmpty ? null : value,
+                  );
                   if (ctx.mounted) {
                     Navigator.pop(ctx);
                   }

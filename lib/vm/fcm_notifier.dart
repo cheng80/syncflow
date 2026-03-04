@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -8,13 +9,18 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:syncflow/service/api_client.dart';
+import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/util/session_secure_storage.dart';
+import 'package:syncflow/view/board_detail_screen.dart';
 
 class FcmNotifier extends Notifier<bool> {
   StreamSubscription<String>? _fcmTokenRefreshSubscription;
   StreamSubscription<RemoteMessage>? _fcmForegroundSubscription;
+  StreamSubscription<RemoteMessage>? _fcmOpenedAppSubscription;
   AppLifecycleListener? _appLifecycleListener;
-  bool _openedNotificationSettings = false;
+  Timer? _permissionRecheckTimer;
+  int _permissionRecheckAttempt = 0;
+  String? _lastHandledNavKey;
 
   final FlutterLocalNotificationsPlugin _localNotifications =
       FlutterLocalNotificationsPlugin();
@@ -26,6 +32,13 @@ class FcmNotifier extends Notifier<bool> {
     description: 'Show push notifications while app is in foreground',
     importance: Importance.high,
   );
+  static const List<Duration> _permissionRecheckDelays = [
+    Duration(seconds: 2),
+    Duration(seconds: 5),
+    Duration(seconds: 10),
+    Duration(seconds: 20),
+    Duration(seconds: 40),
+  ];
 
   @override
   bool build() {
@@ -34,13 +47,10 @@ class FcmNotifier extends Notifier<bool> {
   }
 
   Future<void> initialize() async {
-    debugPrint('FCM initialize called. state=$state, firebaseApps=${Firebase.apps.length}');
     if (state) {
-      debugPrint('FCM initialize skipped: already initialized');
       return;
     }
     if (Firebase.apps.isEmpty) {
-      debugPrint('FCM initialize skipped: Firebase not initialized');
       return;
     }
 
@@ -49,14 +59,16 @@ class FcmNotifier extends Notifier<bool> {
     unawaited(_initFcmAndPermission());
     _setupFcmTokenRefreshListener();
     _setupForegroundPushListener();
+    _setupNotificationTapListeners();
     _setupPermissionResumeListener();
-    debugPrint('FCM initialize done: listeners attached');
   }
 
   void _dispose() {
     _fcmTokenRefreshSubscription?.cancel();
     _fcmForegroundSubscription?.cancel();
+    _fcmOpenedAppSubscription?.cancel();
     _appLifecycleListener?.dispose();
+    _permissionRecheckTimer?.cancel();
   }
 
   Future<void> _initLocalNotifications() async {
@@ -66,13 +78,20 @@ class FcmNotifier extends Notifier<bool> {
     const settings = InitializationSettings(android: android, iOS: ios);
 
     try {
-      debugPrint('FCM local notifications init start');
-      await _localNotifications.initialize(settings);
+      await _localNotifications.initialize(
+        settings,
+        onDidReceiveNotificationResponse: (response) {
+          final payload = response.payload;
+          if (payload == null || payload.isEmpty) return;
+          final decoded = _decodePayload(payload);
+          if (decoded == null) return;
+          unawaited(_handlePushNavigation(decoded));
+        },
+      );
       await _localNotifications
           .resolvePlatformSpecificImplementation<
               AndroidFlutterLocalNotificationsPlugin>()
           ?.createNotificationChannel(_foregroundChannel);
-      debugPrint('FCM local notifications init done');
     } catch (e) {
       debugPrint('Local notifications init skipped: $e');
     }
@@ -80,16 +99,7 @@ class FcmNotifier extends Notifier<bool> {
 
   Future<void> _initFcmAndPermission() async {
     if (Firebase.apps.isEmpty) return;
-    debugPrint('FCM permission/token init start');
-    await _requestNotificationPermission();
-    try {
-      final fcmToken = await FirebaseMessaging.instance.getToken();
-      debugPrint('FCM token: $fcmToken');
-      await _syncCurrentFcmTokenIfLoggedIn();
-      debugPrint('FCM permission/token init done');
-    } catch (e) {
-      debugPrint('FCM token skipped: $e');
-    }
+    await _runPermissionRecheck();
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -97,24 +107,14 @@ class FcmNotifier extends Notifier<bool> {
     try {
       final status = await Permission.notification.status;
       if (status.isPermanentlyDenied) {
-        debugPrint('Notification permission permanently denied.');
-        _openedNotificationSettings = true;
-        unawaited(openAppSettings());
+        // 자동으로 설정 앱을 열지 않는다. (사용자 의도 없는 강제 이동 방지)
         return;
       }
 
-      if (status.isDenied || status.isRestricted) {
+      if (status.isDenied) {
         final result = await Permission.notification.request();
-        debugPrint('Notification permission: $result');
 
-        if (result.isPermanentlyDenied || result.isRestricted) {
-          debugPrint('Notification permission blocked.');
-          _openedNotificationSettings = true;
-          unawaited(openAppSettings());
-          return;
-        }
-      } else {
-        debugPrint('Notification permission already: $status');
+        if (result.isPermanentlyDenied && !await _isFcmAuthorized()) return;
       }
 
       // Android 13+/iOS 모두 FCM 권한 상태를 재확인한다.
@@ -123,7 +123,9 @@ class FcmNotifier extends Notifier<bool> {
         badge: true,
         sound: true,
       );
-      debugPrint('FCM auth status: ${settings.authorizationStatus}');
+      if (settings.authorizationStatus == AuthorizationStatus.denied) {
+        debugPrint('FCM permission denied.');
+      }
     } catch (e) {
       debugPrint('Notification permission check skipped: $e');
     }
@@ -133,17 +135,11 @@ class FcmNotifier extends Notifier<bool> {
     _appLifecycleListener?.dispose();
     _appLifecycleListener = AppLifecycleListener(
       onResume: () async {
-        if (!_openedNotificationSettings) return;
-
         try {
-          final status = await Permission.notification.status;
-          debugPrint('Notification permission on resume: $status');
-
-          if (status.isGranted) {
-            _openedNotificationSettings = false;
-            await _syncCurrentFcmTokenIfLoggedIn();
-            debugPrint('FCM token resynced after settings return.');
+          if (_permissionRecheckTimer == null && _permissionRecheckAttempt == 0) {
+            return;
           }
+          await _runPermissionRecheck();
         } catch (e) {
           debugPrint('Permission resume check skipped: $e');
         }
@@ -151,20 +147,75 @@ class FcmNotifier extends Notifier<bool> {
     );
   }
 
-  Future<void> _syncCurrentFcmTokenIfLoggedIn() async {
+  void _schedulePermissionRecheck() {
+    if (_permissionRecheckAttempt >= _permissionRecheckDelays.length) {
+      debugPrint('Permission/token recheck max attempts reached.');
+      return;
+    }
+    _permissionRecheckTimer?.cancel();
+    final delay = _permissionRecheckDelays[_permissionRecheckAttempt];
+    _permissionRecheckAttempt += 1;
+    _permissionRecheckTimer = Timer(delay, () {
+      unawaited(_runPermissionRecheck());
+    });
+  }
+
+  void _clearPermissionRecheck() {
+    _permissionRecheckTimer?.cancel();
+    _permissionRecheckTimer = null;
+    _permissionRecheckAttempt = 0;
+  }
+
+  Future<void> _runPermissionRecheck() async {
+    await _requestNotificationPermission();
+    final granted = await _isNotificationPermissionGranted();
+    if (!granted) {
+      _schedulePermissionRecheck();
+      return;
+    }
+
+    final synced = await _syncCurrentFcmTokenIfLoggedIn();
+    if (!synced) {
+      _schedulePermissionRecheck();
+      return;
+    }
+    _clearPermissionRecheck();
+  }
+
+  Future<bool> _isNotificationPermissionGranted() async {
+    try {
+      final status = await Permission.notification.status;
+      if (status.isGranted) return true;
+    } catch (_) {}
+    return _isFcmAuthorized();
+  }
+
+  Future<bool> _isFcmAuthorized() async {
+    final settings = await FirebaseMessaging.instance.getNotificationSettings();
+    return settings.authorizationStatus == AuthorizationStatus.authorized ||
+        settings.authorizationStatus == AuthorizationStatus.provisional;
+  }
+
+  Future<bool> _syncCurrentFcmTokenIfLoggedIn() async {
     final sessionToken = await SessionSecureStorage.getSessionToken();
-    if (sessionToken == null || sessionToken.isEmpty) return;
+    if (sessionToken == null || sessionToken.isEmpty) return true;
 
     try {
       final token = await FirebaseMessaging.instance.getToken();
-      if (token == null || token.isEmpty) return;
+      if (token == null || token.isEmpty) {
+        debugPrint('[FCM][TOKEN_SYNC][RETRY] token is empty');
+        return false;
+      }
       await ApiClient().upsertPushToken(
         sessionToken,
         token: token,
         platform: _currentPlatform(),
       );
+      debugPrint('[FCM][TOKEN_SYNC][OK] platform=${_currentPlatform()}');
+      return true;
     } catch (e) {
-      debugPrint('FCM initial sync skipped: $e');
+      debugPrint('[FCM][TOKEN_SYNC][FAIL] $e');
+      return false;
     }
   }
 
@@ -182,8 +233,9 @@ class FcmNotifier extends Notifier<bool> {
             token: newToken,
             platform: _currentPlatform(),
           );
+          debugPrint('[FCM][TOKEN_REFRESH_SYNC][OK] platform=${_currentPlatform()}');
         } catch (e) {
-          debugPrint('FCM refresh sync failed: $e');
+          debugPrint('[FCM][TOKEN_REFRESH_SYNC][FAIL] $e');
         }
       },
       onError: (error) {
@@ -193,21 +245,14 @@ class FcmNotifier extends Notifier<bool> {
   }
 
   void _setupForegroundPushListener() {
-    debugPrint('FCM onMessage listener setup');
     _fcmForegroundSubscription?.cancel();
     _fcmForegroundSubscription = FirebaseMessaging.onMessage.listen(
       (message) async {
-        final receivedLog =
-            'FCM foreground message received: id=${message.messageId}, '
-            'hasNotification=${message.notification != null}, data=${message.data}';
-        debugPrint(receivedLog);
         final notification = message.notification;
         final title = notification?.title ?? message.data['title']?.toString();
         final body = notification?.body ?? message.data['body']?.toString();
 
         if ((title == null || title.isEmpty) && (body == null || body.isEmpty)) {
-          const skippedLog = 'FCM foreground local notify skipped: empty title/body';
-          debugPrint(skippedLog);
           return;
         }
 
@@ -234,21 +279,83 @@ class FcmNotifier extends Notifier<bool> {
                 presentSound: true,
               ),
             ),
-            payload: message.messageId,
+            payload: jsonEncode({
+              ...message.data,
+              if (message.messageId != null) 'message_id': message.messageId,
+            }),
           );
-          final shownLog =
-              'FCM foreground local notify shown: title=$title, body=$body';
-          debugPrint(shownLog);
         } catch (e) {
-          final failedLog = 'Foreground push local notify failed: $e';
-          debugPrint(failedLog);
+          debugPrint('Foreground push local notify failed: $e');
         }
       },
       onError: (error) {
-        final errorLog = 'FCM onMessage error: $error';
-        debugPrint(errorLog);
+        debugPrint('FCM onMessage error: $error');
       },
     );
+  }
+
+  void _setupNotificationTapListeners() {
+    _fcmOpenedAppSubscription?.cancel();
+    _fcmOpenedAppSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
+      (message) {
+        unawaited(_handlePushNavigation(message.data));
+      },
+      onError: (error) {
+        debugPrint('FCM onMessageOpenedApp error: $error');
+      },
+    );
+
+    FirebaseMessaging.instance.getInitialMessage().then((message) {
+      if (message == null) return;
+      unawaited(_handlePushNavigation(message.data));
+    }).catchError((e) {
+      debugPrint('FCM getInitialMessage skipped: $e');
+    });
+  }
+
+  Map<String, dynamic>? _decodePayload(String payload) {
+    try {
+      final decoded = jsonDecode(payload);
+      if (decoded is Map<String, dynamic>) return decoded;
+      if (decoded is Map) return Map<String, dynamic>.from(decoded);
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _handlePushNavigation(Map<String, dynamic>? data) async {
+    if (data == null || data.isEmpty) return;
+
+    final boardId = _toInt(data['board_id']);
+    if (boardId == null || boardId <= 0) return;
+    final cardId = _toInt(data['card_id']);
+    final navKey = '$boardId:${cardId ?? 0}:${data['event_type'] ?? ''}';
+    if (_lastHandledNavKey == navKey) return;
+    _lastHandledNavKey = navKey;
+
+    final sessionToken = await SessionSecureStorage.getSessionToken();
+    if (sessionToken == null || sessionToken.isEmpty) return;
+
+    final nav = rootNavigatorKey.currentState;
+    final ctx = nav?.context;
+    if (nav == null || ctx == null || !ctx.mounted) return;
+
+    nav.push(
+      MaterialPageRoute(
+        builder: (_) => BoardDetailScreen(
+          boardId: boardId,
+          title: 'Board #$boardId',
+          ownerId: null,
+          initialCardId: cardId,
+        ),
+      ),
+    );
+  }
+
+  int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
   }
 }
 

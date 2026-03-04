@@ -15,6 +15,9 @@
 - 담당자(assignee): 도입 완료 (담당자 선택 UI, 담당자별 필터)
 - 멘션(@mention): 파싱/동기화 + 인앱 UI(@Me 배지, 멘션만 보기, 전체/완료/미완료 필터) 구현됨
 - 카드 단위 완료: `status(active/done)` + 상세/타일 체크 UI 구현됨, 완료 카드도 이동 가능
+- FCM 클라이언트 구조: `main.dart` 비대화 해소를 위해 `lib/vm/fcm_notifier.dart`로 분리 완료 (Riverpod Notifier 기반)
+- 포그라운드 푸시: `FirebaseMessaging.onMessage` + `flutter_local_notifications` 경로 적용 완료 (iOS/Android 공통)
+- FCM 문서: `docs/NEW-FCM구현 및 설정가이드`를 Riverpod 기본 전제로 재정비 완료 (2026-03-05)
 - 세분화 알림 기준: 부족
 - 결과: FCM 즉시 알림 후보가 제한적
 
@@ -67,6 +70,8 @@
 - [x] `permission_handler` 알림 권한 설정/코드 경로 점검 및 반영 (2026-03-04)
 - [x] 알림 권한 영구 거부 시 시스템 설정 이동(`openAppSettings`) 처리 (2026-03-04)
 - [x] 설정 앱 복귀 시 권한 재확인 및 FCM 토큰 재동기화 처리 (2026-03-04)
+- [x] 포그라운드 푸시 수신 시 로컬 알림 표출 적용 (`onMessage` -> local notification, 2026-03-05)
+- [x] Android 포그라운드 알림 채널 보강 (`syncflow_foreground_push_v2`, 2026-03-05)
 - [ ] 기본 알림 설정 도입
   - [ ] 멘션만
   - [ ] 내 담당 카드만
@@ -81,6 +86,12 @@
 - [x] 멘션됨 (서버 트리거 구현: `cards` create/update 시 신규 멘션 대상 발송)
 - [x] 내 담당 카드 상태 변경 (서버 트리거 구현: `assignee_id` 변경 시 신규 담당자 발송)
 - [ ] 보드 초대 수락/실패
+
+**구조/문서 정리 (추가)**
+
+- [x] FCM 로직을 Riverpod Notifier(`fcm_notifier`)로 분리 (2026-03-05)
+- [x] 앱 부팅 시 `AppBootstrap`에서 FCM 초기화 1회 트리거 (2026-03-05)
+- [x] NEW-FCM 문서(01/02/03/04/README) 최신 구조 반영 및 Riverpod 기준 명시 (2026-03-05)
 
 ### 우선순위 2-2 (협업 정확도 향상)
 
@@ -117,8 +128,9 @@
 - [ ] `card_comments` 테이블
 - [ ] `notifications` 테이블
   - [ ] `type`, `target_user_id`, `board_id`, `card_id`, `is_read`, `created_at`
-- [ ] `push_tokens` 테이블
-  - [ ] `user_id`, `platform`, `token`, `updated_at`, `is_active`
+- [x] `push_tokens` 테이블
+  - [x] `user_id`, `platform`, `token`, `updated_at`, `is_active`
+  - [x] `device_id`, `app_version`, `created_at` (확장 반영)
 
 ---
 
@@ -130,7 +142,6 @@
 - [x] 담당자 지정/해제 API
 - [ ] 알림 설정 조회/수정 API
 - [ ] 알림 목록/읽음 처리 API
-- [ ] FCM 토큰 등록/삭제 API
 - [x] FCM 토큰 등록/삭제 API (`/v1/push-tokens`, 2026-03-04)
 
 ---
@@ -143,6 +154,8 @@
 - [x] 카드 상세: 내 멘션 하이라이트 (1단계 후속)
 - [x] 카드 상세: 담당자 선택 UI
 - [x] 카드 상세/타일: 완료 체크 UI (1단계)
+- [x] FCM 초기화/권한/토큰갱신/포그라운드수신 로직 분리 (`lib/vm/fcm_notifier.dart`, 2026-03-05)
+- [x] 앱 시작 시 FCM 초기화 트리거 (`AppBootstrap`, 2026-03-05)
 - [ ] 설정 화면: 알림 수신 기준/시간대
 - [ ] 푸시 탭 딥링크 라우팅
   - [ ] `boardId`, `cardId`, `eventType` 처리
@@ -152,8 +165,8 @@
 ## 서버(FastAPI) 작업 리스트
 
 - [ ] 이벤트 발생 지점 표준화 (생성/수정/이동/완료/댓글/멘션)
-- [ ] FCM 발송 서비스 분리
-- [ ] 이벤트 -> 수신자 결정 -> 전송 파이프라인 구현
+- [x] FCM 발송 서비스 분리 (`fastapi/app/utils/push_service.py`, 2026-03-05)
+- [x] 이벤트 -> 수신자 결정 -> 전송 파이프라인 1차 구현 (멘션/담당자 변경 경로, 2026-03-05)
 - [ ] 감사 로그/모니터링 추가
 
 ---

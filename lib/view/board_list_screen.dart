@@ -188,11 +188,10 @@ class BoardListScreen extends ConsumerWidget {
   /// 첫 설치 사용자용 튜토리얼 보드/샘플 카드를 자동 생성한다.
   static Future<void> _createTutorialBoardOnFirstInstall(
     BuildContext context,
-    WidgetRef ref, {
-    bool forceIfMissing = false,
-  }) async {
+    WidgetRef ref,
+  ) async {
     if (_isCreatingTutorial) return;
-    if (!forceIfMissing && AppStorage.hasTutorialBoardCreated) return;
+    if (AppStorage.hasTutorialBoardCreated) return;
     _isCreatingTutorial = true;
     try {
       await ref.read(boardListNotifierProvider.notifier).ensureTutorialBoardWithSamples(
@@ -242,16 +241,16 @@ class BoardListScreen extends ConsumerWidget {
 
     ref.listen(boardListNotifierProvider, (prev, next) {
       next.whenData((boards) {
-        final hasTutorial = boards.any((b) => b.title == BoardListNotifier.tutorialBoardTitle);
         final sessionToken = ref.read(sessionNotifierProvider).value?.sessionToken;
+        // 최초 설치 1회만 자동 생성:
+        // - 세션이 있고
+        // - 아직 튜토리얼 자동생성 플래그가 false이며
+        // - 현재 보드가 하나도 없을 때만 생성
         final shouldCreate = sessionToken != null &&
-            (boards.isEmpty || (!hasTutorial && !AppStorage.hasTutorialBoardCreated));
+            !AppStorage.hasTutorialBoardCreated &&
+            boards.isEmpty;
         if (shouldCreate) {
-          _createTutorialBoardOnFirstInstall(
-            context,
-            ref,
-            forceIfMissing: boards.isEmpty && !hasTutorial,
-          );
+          _createTutorialBoardOnFirstInstall(context, ref);
         }
       });
     });

@@ -23,21 +23,25 @@ skinparam rectangle {
 
 ' ================== APP ==================
 rectangle "📱 APP\n\n**SyncFlow**\n\nFlutter\nState Management:\n**Riverpod**" as App #E8F4FD
+rectangle "🔥 Firebase FCM\n\n- token issue/refresh\n- push receive" as FCM #FFF4E6
+rectangle "🔔 Local Notifications\n\n- foreground push UI" as LNP #FFF9DB
 
 ' ================== LOCAL STORAGE ==================
 rectangle "⚙️ GetStorage\n\n- theme_mode\n- locale\n- wakelock\n- tutorial_done" as Storage #FDEDEC
-
 rectangle "🔐 SecureStorage\n\n- session_token" as SecureStorage #E8F5E9
 
 ' ================== BACKEND ==================
-rectangle "☁️ FastAPI\n\nREST:\n/v1/auth\n/v1/boards\n/v1/cards\n\nWebSocket:\n/ws" as API #E8F5E9
+rectangle "☁️ FastAPI\n\nREST:\n/v1/auth\n/v1/boards\n/v1/cards\n/v1/push-tokens\n\nWebSocket:\n/ws" as API #E8F5E9
 
-database "MySQL\n\nsyncflow_db\n- users\n- email_verifications\n- sessions\n- boards\n- board_members\n- columns\n- cards\n- board_invites" as MySQL #E3F2FD
+database "MySQL\n\nsyncflow_db\n- users\n- email_verifications\n- sessions\n- boards\n- board_members\n- columns\n- cards\n- card_mentions\n- push_tokens\n- board_invites" as MySQL #E3F2FD
 
 ' ================== 연결 ==================
 App --> Storage : Preferences\n(AppStorage)
 App --> SecureStorage : Session Token\n(SessionSecureStorage)
+App --> FCM : FCM SDK\n(firebase_messaging)
+App --> LNP : foreground notify\n(flutter_local_notifications)
 App --> API : REST + WebSocket\n(ApiClient, WsService)
 API --> MySQL : CRUD
+API --> FCM : Admin SDK push send\n(push_service.py)
 
 @enduml
