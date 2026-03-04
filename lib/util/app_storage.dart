@@ -90,4 +90,21 @@ class AppStorage {
   /// 실패 시 재시도용
   static Future<void> resetTutorialBoardCreated() =>
       _storage.write(_keyTutorialBoardCreated, false);
+
+  // ─── 개발용 API Base URL 오버라이드 ─────────────────
+  static const String _keyApiBaseUrlOverride = 'api_base_url_override';
+
+  /// 런타임 API 주소 오버라이드 (null/빈문자면 플랫폼 기본값 사용)
+  static String? getApiBaseUrlOverride() {
+    final v = _storage.read<String>(_keyApiBaseUrlOverride);
+    if (v == null) return null;
+    final t = v.trim();
+    return t.isEmpty ? null : t;
+  }
+
+  static Future<void> setApiBaseUrlOverride(String? value) =>
+      _storage.write(_keyApiBaseUrlOverride, (value ?? '').trim());
+
+  static Future<void> clearApiBaseUrlOverride() =>
+      _storage.remove(_keyApiBaseUrlOverride);
 }

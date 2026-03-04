@@ -51,7 +51,7 @@ class _AssigneeFilterDropdown extends StatelessWidget {
               (m) => DropdownMenuItem<int?>(
                 value: m.userId,
                 child: Text(
-                  m.display,
+                  m.email,
                   style: TextStyle(fontSize: ConfigUI.fontSizeLabel),
                 ),
               ),
@@ -137,6 +137,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
           a[i].title != b[i].title ||
           a[i].description != b[i].description ||
           a[i].priority != b[i].priority ||
+          a[i].assigneeId != b[i].assigneeId ||
           a[i].status != b[i].status ||
           !_intListEquals(a[i].mentionedUserIds, b[i].mentionedUserIds)) {
         return false;

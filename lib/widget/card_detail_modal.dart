@@ -168,26 +168,6 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       final token = session?.sessionToken;
       if (token == null) return;
 
-      if (_wsService.isConnected) {
-        final reqId =
-            'update_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
-        await _wsService.updateCard(
-          boardId: widget.boardId,
-          cardId: widget.card.id,
-          patch: {
-            'title': title,
-            'description': _descController.text.trim().isEmpty
-                ? ''
-                : _descController.text.trim(),
-            'status': _status,
-            'assignee_id': _assigneeId,
-          },
-          reqId: reqId,
-        );
-        if (mounted) CustomNavigationUtil.back(context);
-        return;
-      }
-
       await ref
           .read(cardHandlerProvider)
           .updateCard(
@@ -220,7 +200,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
         ? context.tr('assigneeNone')
         : _members
                 .where((m) => m.userId == _assigneeId)
-                .map((m) => m.display)
+                .map((m) => m.email)
                 .firstOrNull ??
             context.tr('assigneeNone');
     return InkWell(
@@ -274,8 +254,11 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
             ),
             ..._members.map(
               (m) => ListTile(
-                title: Text(m.display),
-                subtitle: m.display != m.email ? Text(m.email) : null,
+                title: Text(
+                  m.email,
+                  softWrap: true,
+                ),
+                subtitle: m.display != m.email ? Text(m.display) : null,
                 onTap: () => Navigator.pop(ctx, m.userId),
               ),
             ),
@@ -388,18 +371,6 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       final session = ref.read(sessionNotifierProvider).value;
       final token = session?.sessionToken;
       if (token == null) return;
-
-      if (_wsService.isConnected) {
-        final reqId =
-            'archive_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
-        await _wsService.archiveCard(
-          boardId: widget.boardId,
-          cardId: widget.card.id,
-          reqId: reqId,
-        );
-        if (mounted) CustomNavigationUtil.back(context);
-        return;
-      }
 
       await ref.read(cardHandlerProvider).archiveCard(token, widget.card.id);
       widget.onRefresh();

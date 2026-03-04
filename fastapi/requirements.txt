@@ -8,3 +8,6 @@ pymysql>=1.1.0
 
 # 환경변수
 python-dotenv>=1.0.0
+
+# Push (FCM Admin SDK)
+firebase-admin>=6.8.0

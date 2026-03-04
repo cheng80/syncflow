@@ -30,11 +30,12 @@ app.add_middleware(
 # ============================================
 # 라우터 등록
 # ============================================
-from app.api import auth, boards, cards
+from app.api import auth, boards, cards, push_tokens
 
 app.include_router(auth.router, prefix="/v1/auth", tags=["auth"])
 app.include_router(boards.router, prefix="/v1/boards", tags=["boards"])
 app.include_router(cards.router, prefix="/v1/cards", tags=["cards"])
+app.include_router(push_tokens.router, prefix="/v1", tags=["push_tokens"])
 
 # WebSocket
 from app.ws.connection import websocket_endpoint

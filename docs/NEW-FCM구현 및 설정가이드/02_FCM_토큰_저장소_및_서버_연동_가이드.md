@@ -1,4 +1,6 @@
-# FCM 토큰 저장소 및 서버 연동 가이드 (공용, 2026-03-04 검증)
+# FCM 토큰 저장소 및 서버 연동 가이드 (공용, 2026-03-05 갱신)
+
+본 문서는 **Flutter + Riverpod** 조합을 기본 전제로 작성되었다.
 
 ## 목적
 
@@ -25,14 +27,14 @@ fcm_server_synced
 fcm_last_sync_attempt
 ```
 
-### SyncFlow 버전
+### 참고: 앱별 구현 예시 (SyncFlow)
 
 ```text
 fcm_token
 fcm_last_sent_token
 fcm_server_synced
 fcm_last_sync_attempt
-# 저장소 구현은 Riverpod + GetStorage(또는 secure storage) 기준 권장
+# 저장소 구현은 앱 구조에 맞게 선택 (예: secure storage, key-value storage)
 ```
 
 ## 2. 토큰 API
@@ -51,7 +53,7 @@ fcm_last_sync_attempt
 }
 ```
 
-### SyncFlow 버전
+### 참고: 앱별 구현 예시 (SyncFlow)
 
 `POST /v1/push-tokens` (권장 추가안)
 
@@ -90,7 +92,7 @@ CREATE TABLE push_tokens (
 );
 ```
 
-### SyncFlow 버전
+### 참고: 앱별 구현 예시 (SyncFlow)
 
 ```sql
 CREATE TABLE push_tokens (
@@ -112,14 +114,34 @@ CREATE TABLE push_tokens (
 ### 공용 버전
 
 ```dart
-FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
-  // 1) 로컬 저장
-  // 2) 서버 upsert API 호출
-  // 3) 실패 시 재시도 큐 적재
-});
+Future<void> syncCurrentTokenToServer({
+  required String authToken,
+  required Future<void> Function(String token) saveLocalToken,
+  required Future<void> Function(String token) upsertServerToken,
+}) async {
+  final token = await FirebaseMessaging.instance.getToken();
+  if (token == null || token.isEmpty) return;
+
+  await saveLocalToken(token);
+
+  try {
+    await upsertServerToken(token);
+  } catch (_) {
+    // TODO: 재시도 큐(백오프) 적재
+  }
+
+  FirebaseMessaging.instance.onTokenRefresh.listen((newToken) async {
+    await saveLocalToken(newToken);
+    try {
+      await upsertServerToken(newToken);
+    } catch (_) {
+      // TODO: 재시도 큐(백오프) 적재
+    }
+  });
+}
 ```
 
-### SyncFlow 버전
+### 참고: 앱별 구현 예시 (SyncFlow)
 
 ```dart
 import 'dart:convert';

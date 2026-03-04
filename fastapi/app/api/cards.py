@@ -4,6 +4,8 @@ SyncFlow 카드 API
 REST 성공 시 WebSocket broadcast (실시간 동기화)
 """
 
+import asyncio
+import logging
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,9 +17,11 @@ from app.utils.mention_util import (
     get_card_mentioned_user_ids,
     sync_card_mentions,
 )
+from app.utils.push_service import send_push_to_users
 from app.ws.room import broadcast_to_board
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 def _ts_ms() -> int:
@@ -31,6 +35,87 @@ def _check_board_member(cursor, board_id: int, user_id: int) -> None:
     )
     if not cursor.fetchone():
         raise HTTPException(status_code=404, detail="보드를 찾을 수 없습니다.")
+
+
+async def _send_mention_push(
+    *,
+    actor_user_id: int,
+    board_id: int,
+    card_id: int,
+    card_title: str,
+    target_user_ids: list[int],
+) -> None:
+    recipients = sorted({uid for uid in target_user_ids if uid and uid != actor_user_id})
+    if not recipients:
+        return
+    try:
+        result = await asyncio.to_thread(
+            send_push_to_users,
+            user_ids=recipients,
+            title="SyncFlow 멘션 알림",
+            body=f"카드 '{card_title}'에서 회원님을 멘션했습니다.",
+            data={
+                "event_type": "mention",
+                "board_id": board_id,
+                "card_id": card_id,
+            },
+        )
+        logger.info(
+            "push mention sent: board_id=%s card_id=%s targets=%s result=%s",
+            board_id,
+            card_id,
+            recipients,
+            result,
+        )
+    except Exception:
+        # 푸시 실패는 카드 API 실패로 전파하지 않음
+        logger.exception(
+            "push mention failed: board_id=%s card_id=%s targets=%s",
+            board_id,
+            card_id,
+            recipients,
+        )
+        return
+
+
+async def _send_assignee_push(
+    *,
+    actor_user_id: int,
+    board_id: int,
+    card_id: int,
+    card_title: str,
+    assignee_id: int | None,
+) -> None:
+    if assignee_id is None or assignee_id == actor_user_id:
+        return
+    try:
+        result = await asyncio.to_thread(
+            send_push_to_users,
+            user_ids=[assignee_id],
+            title="SyncFlow 담당자 알림",
+            body=f"카드 '{card_title}'의 담당자로 지정되었습니다.",
+            data={
+                "event_type": "assignee_assigned",
+                "board_id": board_id,
+                "card_id": card_id,
+            },
+        )
+        logger.info(
+            "push assignee sent: board_id=%s card_id=%s assignee_id=%s result=%s",
+            board_id,
+            card_id,
+            assignee_id,
+            result,
+        )
+    except Exception:
+        # 푸시 실패는 카드 API 실패로 전파하지 않음
+        logger.exception(
+            "push assignee failed: board_id=%s card_id=%s assignee_id=%s",
+            board_id,
+            card_id,
+            assignee_id,
+        )
+        return
 
 
 class CreateCardRequest(BaseModel):
@@ -127,6 +212,13 @@ async def create_card(
             "type": "CARD_CREATED",
             "data": {"board_id": board_id, "card": {**result, "updated_at": _ts_ms()}, "board_version": board_version},
         })
+        await _send_mention_push(
+            actor_user_id=user_id,
+            board_id=board_id,
+            card_id=card_id,
+            card_title=result["title"],
+            target_user_ids=result["mentioned_user_ids"],
+        )
         return result
     finally:
         conn.close()
@@ -150,6 +242,17 @@ async def update_card(
             if not row:
                 raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
             board_id, old_column_id = row
+            cursor.execute(
+                "SELECT assignee_id, title, description FROM cards WHERE id = %s",
+                (card_id,),
+            )
+            old_assignee_id, old_title, old_description = cursor.fetchone()
+            old_mention_user_ids = get_card_mentioned_user_ids(
+                cursor,
+                card_id,
+                fallback_board_id=board_id,
+                fallback_texts=(old_title, old_description or ""),
+            )
 
             _check_board_member(cursor, board_id, user_id)
 
@@ -319,6 +422,30 @@ async def update_card(
                     "board_version": board_version,
                 },
             })
+
+        if req.title is not None or req.description is not None:
+            new_mentions = sorted(
+                set(result["mentioned_user_ids"]) - set(old_mention_user_ids)
+            )
+            assignee_for_push = result["assignee_id"] if "assignee_id" in req.model_fields_set else None
+            if assignee_for_push is not None:
+                new_mentions = [uid for uid in new_mentions if uid != assignee_for_push]
+            await _send_mention_push(
+                actor_user_id=user_id,
+                board_id=board_id,
+                card_id=card_id,
+                card_title=result["title"],
+                target_user_ids=new_mentions,
+            )
+
+        if "assignee_id" in req.model_fields_set and result["assignee_id"] != old_assignee_id:
+            await _send_assignee_push(
+                actor_user_id=user_id,
+                board_id=board_id,
+                card_id=card_id,
+                card_title=result["title"],
+                assignee_id=result["assignee_id"],
+            )
         return result
     finally:
         conn.close()

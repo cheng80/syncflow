@@ -5,6 +5,8 @@ JOIN_BOARD, LEAVE_BOARD, CARD_* 이벤트 처리
 
 import json
 import time
+import asyncio
+import logging
 from datetime import datetime
 from fastapi import WebSocket
 
@@ -13,11 +15,13 @@ from app.utils.mention_util import (
     get_card_mentioned_user_ids,
     sync_card_mentions,
 )
+from app.utils.push_service import send_push_to_users
 from app.ws.room import join_room, leave_room, leave_all_rooms, broadcast_to_board, get_room_members
 from app.ws.lock import acquire_lock, renew_lock, release_lock, release_locks_by_user
 
 # ws -> set of board_ids (현재 참여 중인 보드)
 _ws_boards: dict[WebSocket, set[int]] = {}
+logger = logging.getLogger(__name__)
 
 
 def _get_user_display(cursor, user_id: int) -> str:
@@ -47,6 +51,83 @@ def _check_board_member(cursor, board_id: int, user_id: int) -> bool:
         (board_id, user_id),
     )
     return cursor.fetchone() is not None
+
+
+async def _send_mention_push(
+    *,
+    actor_user_id: int,
+    board_id: int,
+    card_id: int,
+    card_title: str,
+    target_user_ids: list[int],
+) -> None:
+    recipients = sorted({uid for uid in target_user_ids if uid and uid != actor_user_id})
+    if not recipients:
+        return
+    try:
+        result = await asyncio.to_thread(
+            send_push_to_users,
+            user_ids=recipients,
+            title="SyncFlow 멘션 알림",
+            body=f"카드 '{card_title}'에서 회원님을 멘션했습니다.",
+            data={
+                "event_type": "mention",
+                "board_id": board_id,
+                "card_id": card_id,
+            },
+        )
+        logger.info(
+            "ws push mention sent: board_id=%s card_id=%s targets=%s result=%s",
+            board_id,
+            card_id,
+            recipients,
+            result,
+        )
+    except Exception:
+        logger.exception(
+            "ws push mention failed: board_id=%s card_id=%s targets=%s",
+            board_id,
+            card_id,
+            recipients,
+        )
+
+
+async def _send_assignee_push(
+    *,
+    actor_user_id: int,
+    board_id: int,
+    card_id: int,
+    card_title: str,
+    assignee_id: int | None,
+) -> None:
+    if assignee_id is None or assignee_id == actor_user_id:
+        return
+    try:
+        result = await asyncio.to_thread(
+            send_push_to_users,
+            user_ids=[assignee_id],
+            title="SyncFlow 담당자 알림",
+            body=f"카드 '{card_title}'의 담당자로 지정되었습니다.",
+            data={
+                "event_type": "assignee_assigned",
+                "board_id": board_id,
+                "card_id": card_id,
+            },
+        )
+        logger.info(
+            "ws push assignee sent: board_id=%s card_id=%s assignee_id=%s result=%s",
+            board_id,
+            card_id,
+            assignee_id,
+            result,
+        )
+    except Exception:
+        logger.exception(
+            "ws push assignee failed: board_id=%s card_id=%s assignee_id=%s",
+            board_id,
+            card_id,
+            assignee_id,
+        )
 
 
 def _get_online_members(board_id: int) -> list[dict]:
@@ -267,6 +348,13 @@ async def _handle_card_create(ws: WebSocket, user_id: int, data: dict, req_id: s
         if req_id:
             payload["req_id"] = req_id
         await broadcast_to_board(board_id, payload)
+        await _send_mention_push(
+            actor_user_id=user_id,
+            board_id=board_id,
+            card_id=card_id,
+            card_title=title,
+            target_user_ids=mentioned_user_ids,
+        )
     finally:
         conn.close()
 
@@ -314,6 +402,18 @@ async def _handle_card_move(ws: WebSocket, user_id: int, data: dict, req_id: str
             if not cursor.fetchone():
                 await _send_error(ws, "NOT_FOUND", "카드를 찾을 수 없습니다", req_id)
                 return
+
+            cursor.execute(
+                "SELECT assignee_id, title, description FROM cards WHERE id = %s",
+                (card_id,),
+            )
+            old_assignee_id, old_title, old_description = cursor.fetchone()
+            old_mention_user_ids = get_card_mentioned_user_ids(
+                cursor,
+                card_id,
+                fallback_board_id=board_id,
+                fallback_texts=(old_title, old_description or ""),
+            )
             cursor.execute(
                 "SELECT 1 FROM columns WHERE id = %s AND board_id = %s",
                 (to_column_id, board_id),
@@ -520,6 +620,18 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
                 row = cursor.fetchone()
                 if row:
                     mention_ids = sync_card_mentions(cursor, board_id, card_id, row[0], row[1] or "")
+            cursor.execute(
+                "SELECT assignee_id, title, description FROM cards WHERE id = %s",
+                (card_id,),
+            )
+            updated_assignee_id, updated_title, updated_description = cursor.fetchone()
+            if mention_ids is None:
+                mention_ids = get_card_mentioned_user_ids(
+                    cursor,
+                    card_id,
+                    fallback_board_id=board_id,
+                    fallback_texts=(updated_title, updated_description or ""),
+                )
             board_version = _touch_and_get_board_version(cursor, board_id)
             conn.commit()
 
@@ -538,6 +650,28 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
         if req_id:
             payload["req_id"] = req_id
         await broadcast_to_board(board_id, payload)
+
+        if "title" in patch or "description" in patch:
+            new_mentions = sorted(set(mention_ids) - set(old_mention_user_ids))
+            assignee_for_push = updated_assignee_id if "assignee_id" in patch else None
+            if assignee_for_push is not None:
+                new_mentions = [uid for uid in new_mentions if uid != assignee_for_push]
+            await _send_mention_push(
+                actor_user_id=user_id,
+                board_id=board_id,
+                card_id=card_id,
+                card_title=updated_title,
+                target_user_ids=new_mentions,
+            )
+
+        if "assignee_id" in patch and updated_assignee_id != old_assignee_id:
+            await _send_assignee_push(
+                actor_user_id=user_id,
+                board_id=board_id,
+                card_id=card_id,
+                card_title=updated_title,
+                assignee_id=updated_assignee_id,
+            )
     finally:
         conn.close()
 

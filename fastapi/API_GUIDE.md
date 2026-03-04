@@ -56,6 +56,15 @@ cp .env.example .env
 # .env 편집: DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, SMTP_* 등
 ```
 
+FCM 서버 발송까지 사용할 경우 아래도 추가 설정합니다.
+
+```bash
+FCM_PUSH_ENABLED=true
+FCM_DRY_RUN=false
+FIREBASE_ADMIN_CREDENTIALS=./secure/serviceAccountKey.json
+FIREBASE_PROJECT_ID=<firebase-project-id> # 선택
+```
+
 ### 4. 데이터베이스 초기화
 
 ```bash
@@ -130,6 +139,12 @@ WebSocket은 `wss://host/ws?token=<session_token>` 형태로 연결합니다.
 | POST | `` | O | 카드 생성 |
 | PATCH | `/{card_id}` | O | 카드 수정 |
 | DELETE | `/{card_id}` | O | 카드 아카이브 |
+
+#### 카드 이벤트 기반 푸시(서버 발송)
+
+- 카드 생성/수정 시 신규 멘션 대상에게 FCM 발송
+- 카드 수정 시 `assignee_id` 변경되면 신규 담당자에게 FCM 발송
+- `push_tokens.is_active=TRUE`인 iOS/Android 토큰으로만 발송
 
 ### WebSocket
 

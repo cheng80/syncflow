@@ -14,6 +14,7 @@
 ```mermaid
 sequenceDiagram
   participant APP as Flutter App
+  participant LNP as Local Notifications Plugin
   participant API as Backend API
   participant DB as push_tokens DB
   participant FCM as Firebase Cloud Messaging
@@ -25,6 +26,8 @@ sequenceDiagram
   API->>DB: 대상 사용자 활성 토큰 조회
   API->>FCM: send message (Admin SDK or HTTP v1)
   FCM-->>DEV: notification/data message
+  DEV-->>APP: onMessage (foreground)
+  APP->>LNP: show local notification
   DEV-->>APP: 앱 열기 (getInitialMessage/onMessageOpenedApp)
 ```
 
@@ -35,6 +38,7 @@ flowchart TB
   subgraph Client
     A[Flutter App]
     B[Firebase Messaging SDK]
+    H[flutter_local_notifications]
   end
 
   subgraph Server
@@ -53,6 +57,7 @@ flowchart TB
   D --> G
   G --> B
   B --> A
+  A --> H
 ```
 
 ## 3. 이벤트 표준 예시

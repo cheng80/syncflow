@@ -9,11 +9,13 @@
 //    └─ _goBack(단계 되돌리기)
 
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
+import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
@@ -70,10 +72,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _loading = false;
         _error = e.message;
       });
-    } catch (_) {
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('sendAuthCode failed: $e');
+        debugPrint('baseUrl=${getApiBaseUrl()}');
+      }
       setState(() {
         _loading = false;
-        _error = context.tr('sendCodeFailed');
+        _error = kDebugMode ? '${context.tr('sendCodeFailed')}\n$e' : context.tr('sendCodeFailed');
       });
     }
   }
@@ -158,14 +164,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    context.tr('appName'),
-                    style: TextStyle(
-                      color: p.textPrimary,
-                      fontSize: ConfigUI.fontSizeTitle,
-                      fontWeight: FontWeight.bold,
+                  GestureDetector(
+                    onLongPress: kReleaseMode
+                        ? null
+                        : () => showApiBaseUrlSettingsSheet(context),
+                    child: Text(
+                      context.tr('appName'),
+                      style: TextStyle(
+                        color: p.textPrimary,
+                        fontSize: ConfigUI.fontSizeTitle,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(

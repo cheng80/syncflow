@@ -109,6 +109,28 @@ class AppDrawer extends ConsumerWidget {
                       if (ctx.mounted) showLanguagePickerSheet(ctx);
                     },
                   ),
+                  if (!kReleaseMode)
+                    ListTile(
+                      leading: Icon(Icons.link, color: p.icon),
+                      title: Text(
+                        'API 주소 설정',
+                        style: TextStyle(color: p.textPrimary, fontSize: 16),
+                      ),
+                      subtitle: Text(
+                        getApiBaseUrl(),
+                        style: TextStyle(color: p.textSecondary, fontSize: 12),
+                      ),
+                      trailing: Icon(Icons.chevron_right, color: p.textSecondary),
+                      onTap: () async {
+                        Navigator.pop(context);
+                        await Future.delayed(const Duration(milliseconds: 220));
+                        if (!context.mounted) return;
+                        final ctx = rootNavigatorKey.currentContext ?? context;
+                        if (ctx.mounted) {
+                          await showApiBaseUrlSettingsSheet(ctx);
+                        }
+                      },
+                    ),
                   ListTile(
                     leading: Icon(Icons.star_outline, color: p.icon),
                     title: Text(

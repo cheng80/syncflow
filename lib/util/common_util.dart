@@ -4,6 +4,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:syncflow/navigation/custom_navigation_util.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
+import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/util/config_ui.dart';
 
 // ─── API Base URL ────────────────────────────────────────────────────────────
@@ -35,7 +36,111 @@ String getApiBaseUrl() {
   if (customApiBaseUrl != null && customApiBaseUrl!.isNotEmpty) {
     return customApiBaseUrl!;
   }
+  final runtimeOverride = AppStorage.getApiBaseUrlOverride();
+  if (runtimeOverride != null && runtimeOverride.isNotEmpty) {
+    return runtimeOverride;
+  }
   return _getApiBaseUrlSync();
+}
+
+String getDefaultApiBaseUrl() => _getApiBaseUrlSync();
+
+Future<void> showApiBaseUrlSettingsSheet(BuildContext context) async {
+  final p = context.appTheme;
+  final currentOverride = AppStorage.getApiBaseUrlOverride() ?? '';
+  final controller = TextEditingController(text: currentOverride);
+
+  await showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (ctx) => Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 16,
+        bottom: MediaQuery.of(ctx).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'API 주소 설정',
+            style: TextStyle(
+              fontSize: ConfigUI.fontSizeSubtitle,
+              fontWeight: FontWeight.bold,
+              color: p.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '기본값: ${getDefaultApiBaseUrl()}',
+            style: TextStyle(color: p.textSecondary, fontSize: ConfigUI.fontSizeCaption),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: controller,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              hintText: 'http://192.168.0.120:8000',
+              filled: true,
+              fillColor: p.cardBackground,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              OutlinedButton(
+                onPressed: () async {
+                  await AppStorage.clearApiBaseUrlOverride();
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                  if (context.mounted) {
+                    showCommonSnackBar(
+                      context,
+                      message: 'API 주소를 기본값으로 복원했습니다: ${getDefaultApiBaseUrl()}',
+                    );
+                  }
+                },
+                child: const Text('기본값 복원'),
+              ),
+              const Spacer(),
+              FilledButton(
+                onPressed: () async {
+                  final value = controller.text.trim();
+                  if (value.isNotEmpty) {
+                    final uri = Uri.tryParse(value);
+                    if (uri == null ||
+                        !(uri.scheme == 'http' || uri.scheme == 'https') ||
+                        uri.host.isEmpty) {
+                      showCommonSnackBar(
+                        ctx,
+                        message: '올바른 URL을 입력하세요. 예: http://192.168.0.120:8000',
+                      );
+                      return;
+                    }
+                  }
+
+                  await AppStorage.setApiBaseUrlOverride(value.isEmpty ? null : value);
+                  if (ctx.mounted) {
+                    Navigator.pop(ctx);
+                  }
+                  if (context.mounted) {
+                    showCommonSnackBar(
+                      context,
+                      message: 'API 주소 적용: ${getApiBaseUrl()}',
+                    );
+                  }
+                },
+                child: const Text('저장'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// 최상위 ScaffoldMessenger에 접근하기 위한 글로벌 키.

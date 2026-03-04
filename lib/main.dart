@@ -17,6 +17,10 @@ import 'package:syncflow/vm/session_notifier.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/vm/theme_notifier.dart';
+import 'package:syncflow/vm/fcm_notifier.dart';
+
+import 'package:firebase_core/firebase_core.dart';
+import 'package:syncflow/firebase_options.dart';
 
 Future<void> _initDateFormats() async {
   await Future.wait([
@@ -30,34 +34,63 @@ Future<void> _initDateFormats() async {
 
 void main() async {
   // WebSocket 등 비동기 에러가 앱을 중단하지 않도록 처리
-  runZonedGuarded(() async {
-    await _main();
-  }, (error, stack) {
-    if (error.toString().contains('WebSocket') ||
-        error.toString().contains('Connection was not upgraded')) {
-      // WebSocket 미지원 서버(프록시 등): REST만 사용
-      return;
-    }
-    // 기타 비동기 에러는 콘솔에 출력
-    debugPrint('Unhandled: $error\n$stack');
-  });
+  runZonedGuarded(
+    () async {
+      await _main();
+    },
+    (error, stack) {
+      if (error.toString().contains('WebSocket') ||
+          error.toString().contains('Connection was not upgraded')) {
+        // WebSocket 미지원 서버(프록시 등): REST만 사용
+        return;
+      }
+      // 기타 비동기 에러는 콘솔에 출력
+      debugPrint('Unhandled: $error\n$stack');
+    },
+  );
 }
 
 Future<void> _main() async {
+  debugPrint('[main] start');
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
   FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
+  // Firebase 초기화 (실패 시에도 앱 진입 허용)
+  debugPrint('[main] before Firebase');
+  try {
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    debugPrint('[main] Firebase initialized');
+  } catch (e) {
+    debugPrint('[main] Firebase init failed (FCM disabled): $e');
+  }
+
+  debugPrint('[main] before EasyLocalization');
   await EasyLocalization.ensureInitialized();
   await _initDateFormats();
+  debugPrint('[main] after _initDateFormats');
 
+  debugPrint('[main] before GetStorage.init');
   await GetStorage.init();
+  debugPrint('[main] after GetStorage.init');
 
   // iOS: Keychain은 앱 삭제 후에도 유지됨. GetStorage는 삭제됨.
   // hasAppLaunchedBefore 없음 = 재설치 → Secure Storage(세션) 초기화 → Android/iOS 동작 일치
-  if (!AppStorage.hasAppLaunchedBefore) {
-    await SessionSecureStorage.clearSession();
-    await AppStorage.setAppHasLaunched();
+  // iOS 실기기: flutter_secure_storage 첫 접근 시 hang 가능 → 타임아웃
+  debugPrint('[main] before SecureStorage block, hasLaunched=${AppStorage.hasAppLaunchedBefore}');
+  try {
+    if (!AppStorage.hasAppLaunchedBefore) {
+      debugPrint('[main] calling clearSession (first launch)...');
+      await SessionSecureStorage.clearSession()
+          .timeout(const Duration(seconds: 8), onTimeout: () {
+        debugPrint('[main] clearSession TIMEOUT');
+      });
+      debugPrint('[main] clearSession done');
+      await AppStorage.setAppHasLaunched();
+    }
+  } catch (e) {
+    debugPrint('[main] SecureStorage block error: $e');
   }
+  debugPrint('[main] after SecureStorage block');
 
   // 첫 실행일 저장 (인앱 리뷰 조건용)
   if (AppStorage.getFirstLaunchDate() == null) {
@@ -78,9 +111,31 @@ Future<void> _main() async {
       path: 'assets/translations',
       fallbackLocale: const Locale('ko'),
       useFallbackTranslations: true,
-      child: const ProviderScope(child: MyApp()),
+      child: const ProviderScope(child: AppBootstrap()),
     ),
   );
+}
+
+class AppBootstrap extends ConsumerStatefulWidget {
+  const AppBootstrap({super.key});
+
+  @override
+  ConsumerState<AppBootstrap> createState() => _AppBootstrapState();
+}
+
+class _AppBootstrapState extends ConsumerState<AppBootstrap> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(ref.read(fcmNotifierProvider.notifier).initialize());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const MyApp();
+  }
 }
 
 class MyApp extends ConsumerWidget {
@@ -184,8 +239,6 @@ class _SessionLoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

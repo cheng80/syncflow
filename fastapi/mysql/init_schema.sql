@@ -151,3 +151,19 @@ CREATE TABLE IF NOT EXISTS board_invites (
   FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. push_tokens - FCM 디바이스 토큰 저장
+CREATE TABLE IF NOT EXISTS push_tokens (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id BIGINT NOT NULL,
+  platform VARCHAR(16) NOT NULL,
+  token VARCHAR(512) NOT NULL,
+  device_id VARCHAR(128) DEFAULT NULL,
+  app_version VARCHAR(32) DEFAULT NULL,
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_platform_token (platform, token),
+  INDEX idx_user_active (user_id, is_active),
+  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

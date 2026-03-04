@@ -2,6 +2,8 @@
 // 세션 상태 관리 (Riverpod 3.0+ AsyncNotifier, Secure Storage 사용)
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/util/session_secure_storage.dart';
@@ -32,11 +34,30 @@ class SessionState {
 
 /// SessionNotifier - 세션 상태 관리 (Secure Storage 기반)
 class SessionNotifier extends AsyncNotifier<SessionState> {
+  /// iOS 실기기에서 flutter_secure_storage 첫 접근 시 5~30초 hang 가능 → 타임아웃
+  static const _storageTimeout = Duration(seconds: 10);
+
   @override
   Future<SessionState> build() async {
-    final token = await SessionSecureStorage.getSessionToken();
-    final expires = await SessionSecureStorage.getSessionExpiresAt();
-    var userId = await SessionSecureStorage.getUserId();
+    if (kDebugMode) debugPrint('[SessionNotifier] build start');
+    final token = await SessionSecureStorage.getSessionToken()
+        .timeout(_storageTimeout, onTimeout: () {
+      if (kDebugMode) debugPrint('[SessionNotifier] getSessionToken TIMEOUT');
+      return null;
+    });
+    if (kDebugMode) debugPrint('[SessionNotifier] token done');
+    final expires = await SessionSecureStorage.getSessionExpiresAt()
+        .timeout(_storageTimeout, onTimeout: () {
+      if (kDebugMode) debugPrint('[SessionNotifier] getSessionExpiresAt TIMEOUT');
+      return null;
+    });
+    if (kDebugMode) debugPrint('[SessionNotifier] expires done');
+    var userId = await SessionSecureStorage.getUserId()
+        .timeout(_storageTimeout, onTimeout: () {
+      if (kDebugMode) debugPrint('[SessionNotifier] getUserId TIMEOUT');
+      return null;
+    });
+    if (kDebugMode) debugPrint('[SessionNotifier] userId done');
     if (token != null && expires != null) {
       final dt = DateTime.tryParse(expires);
       if (dt != null && dt.isAfter(DateTime.now())) {
@@ -73,6 +94,12 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
     final token = current?.sessionToken;
     if (token != null) {
       try {
+        final fcmToken = await FirebaseMessaging.instance.getToken();
+        if (fcmToken != null && fcmToken.isNotEmpty) {
+          await ApiClient().deactivatePushToken(token, fcmToken);
+        }
+      } catch (_) {}
+      try {
         await ApiClient().logout(token);
       } catch (_) {}
     }
@@ -98,6 +125,31 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
   Future<void> loginSuccess(String token, String expiresAt, int userId) async {
     await SessionSecureStorage.saveSession(token, expiresAt, userId: userId);
     setSession(token, expiresAt, userId);
+
+    // 로그인 직후 현재 디바이스 FCM 토큰을 서버에 등록
+    try {
+      final fcmToken = await FirebaseMessaging.instance.getToken();
+      if (fcmToken != null && fcmToken.isNotEmpty) {
+        await ApiClient().upsertPushToken(
+          token,
+          token: fcmToken,
+          platform: _currentPlatform(),
+        );
+      }
+    } catch (_) {
+      // FCM 동기화 실패는 로그인 성공을 막지 않는다.
+    }
+  }
+}
+
+String _currentPlatform() {
+  switch (defaultTargetPlatform) {
+    case TargetPlatform.iOS:
+      return 'ios';
+    case TargetPlatform.android:
+      return 'android';
+    default:
+      return 'web';
   }
 }
 

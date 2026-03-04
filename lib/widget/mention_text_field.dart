@@ -43,7 +43,7 @@ class _MentionTextFieldState extends State<MentionTextField> {
   final GlobalKey _fieldKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   static const int _maxOverlayItems = 6;
-  static const double _overlayItemHeight = 44;
+  static const double _overlayItemHeight = 64;
 
   @override
   void initState() {
@@ -217,10 +217,12 @@ class _MentionOverlay extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final m = items[index];
                   return ListTile(
-                    dense: true,
-                    visualDensity: VisualDensity.compact,
+                    dense: false,
+                    visualDensity: VisualDensity.standard,
+                    isThreeLine: true,
                     title: Text(
-                      m.display,
+                      m.email,
+                      softWrap: true,
                       style: TextStyle(
                         fontSize: ConfigUI.fontSizeBody,
                         color: p.textPrimary,
@@ -228,7 +230,7 @@ class _MentionOverlay extends StatelessWidget {
                     ),
                     subtitle: m.display != m.email
                         ? Text(
-                            m.email,
+                            m.display,
                             style: TextStyle(
                               fontSize: ConfigUI.fontSizeCaption,
                               color: p.textSecondary,

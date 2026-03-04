@@ -378,6 +378,48 @@ class ApiClient {
       throw ApiException(body?['detail'] ?? '회원 탈퇴 실패');
     }
   }
+
+  /// POST /v1/push-tokens - FCM 토큰 등록/갱신
+  Future<void> upsertPushToken(
+    String sessionToken, {
+    required String token,
+    required String platform,
+    String? deviceId,
+    String? appVersion,
+  }) async {
+    final body = <String, dynamic>{
+      'token': token,
+      'platform': platform,
+    };
+    if (deviceId != null && deviceId.isNotEmpty) {
+      body['device_id'] = deviceId;
+    }
+    if (appVersion != null && appVersion.isNotEmpty) {
+      body['app_version'] = appVersion;
+    }
+
+    final res = await http.post(
+      Uri.parse(_url('/v1/push-tokens')),
+      headers: _authHeaders(sessionToken),
+      body: CustomJsonUtil.encode(body) ?? '',
+    );
+    if (res.statusCode != 200) {
+      final err = CustomJsonUtil.toMap(res.body);
+      throw ApiException(err?['detail'] ?? 'FCM 토큰 등록 실패');
+    }
+  }
+
+  /// DELETE /v1/push-tokens/{token} - FCM 토큰 비활성화
+  Future<void> deactivatePushToken(String sessionToken, String token) async {
+    final res = await http.delete(
+      Uri.parse(_url('/v1/push-tokens/$token')),
+      headers: _authHeaders(sessionToken),
+    );
+    if (res.statusCode != 200) {
+      final err = CustomJsonUtil.toMap(res.body);
+      throw ApiException(err?['detail'] ?? 'FCM 토큰 비활성화 실패');
+    }
+  }
 }
 
 class ApiException implements Exception {

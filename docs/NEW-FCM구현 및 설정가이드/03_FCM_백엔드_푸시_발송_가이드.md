@@ -1,4 +1,6 @@
-# FCM 백엔드 푸시 발송 가이드 (공용, 2026-03-04 검증)
+# FCM 백엔드 푸시 발송 가이드 (공용, 2026-03-05 갱신)
+
+본 문서는 **Flutter + Riverpod 클라이언트 연동**을 기본 전제로 작성되었다.
 
 ## 핵심 원칙
 
@@ -37,7 +39,7 @@ def send_to_token(token: str, title: str, body: str, data: dict[str, str]):
     return messaging.send(message)
 ```
 
-### SyncFlow 버전 (권장 추가안)
+### 참고: 앱별 구현 예시 (SyncFlow, 권장 추가안)
 
 경로 예시: `fastapi/app/utils/fcm_service.py`
 
@@ -69,7 +71,7 @@ DELETE /api/push-tokens/{token}
 POST /api/push-events
 ```
 
-### SyncFlow 버전 (권장 추가안)
+### 참고: 앱별 구현 예시 (SyncFlow, 권장 추가안)
 
 ```text
 POST /v1/push-tokens
@@ -105,7 +107,7 @@ async def push_events(...):
 }
 ```
 
-### SyncFlow 버전
+### 참고: 앱별 구현 예시 (SyncFlow)
 
 ```json
 {
