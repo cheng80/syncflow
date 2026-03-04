@@ -2,8 +2,10 @@
 
 ## 진행 전략
 
+- **선행 작업**: FCM 문서 공용화/마이그레이션 TODO 완료 후 2단계 착수
+  - 문서: `docs/FCM_MIGRATION_TODO.md`
 - **1단계**: 멘션(@user) + 카드 단위 완료 체크 → 먼저 완료
-- **2단계**: FCM, 역할, 코멘트 등 고도화
+- **2단계**: FCM, 코멘트 등 고도화 (역할은 후순위)
 
 ---
 
@@ -76,7 +78,6 @@
 
 ### 우선순위 2-2 (협업 정확도 향상)
 
-- [ ] 보드 멤버 역할 도입 (`owner`, `editor`, `viewer`)
 - [ ] 카드 코멘트 기능
 - [ ] 카드 활동 로그(누가/언제/무엇을)
 - [ ] 알림 읽음 처리(배지 카운트 정리)
@@ -85,7 +86,6 @@
 
 - [ ] 내 코멘트에 답글
 - [ ] 내가 생성한 카드가 완료/반려됨
-- [ ] 권한 변경됨
 
 ### 우선순위 2-3 (노이즈 제어/운영)
 
@@ -96,11 +96,16 @@
 - [ ] 재전송/중복 방지 키(idempotency key)
 - [ ] 실패 재시도 및 DLQ(서버)
 
+### 우선순위 2-4 (역할/권한, 후순위)
+
+- [ ] 보드 멤버 역할 도입 (`owner`, `editor`, `viewer`)
+- [ ] 권한 변경됨 푸시 트리거
+
 ---
 
 ## 데이터 모델 초안
 
-- [ ] `board_members` 확장: `role`, `joined_at`
+- [ ] `board_members` 확장: `role`, `joined_at` (2-4 후순위)
 - [x] `cards` 확장: `assignee_id`
 - [x] `card_mentions` 테이블 (card_id, mentioned_user_id, source_token, created_at)
 - [ ] `card_comments` 테이블
