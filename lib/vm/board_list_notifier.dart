@@ -1,6 +1,7 @@
 // board_list_notifier.dart
 // 보드 목록 상태 관리
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:syncflow/model/board.dart';
@@ -19,7 +20,11 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
 
     try {
       return await ref.read(boardHandlerProvider).listBoards(token);
-    } catch (_) {
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[BoardList] listBoards 실패: $e');
+        debugPrint('$st');
+      }
       return [];
     }
   }

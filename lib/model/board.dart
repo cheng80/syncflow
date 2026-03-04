@@ -13,11 +13,11 @@ class BoardItem {
   });
 
   factory BoardItem.fromJson(Map<String, dynamic> j) => BoardItem(
-        id: j['id'] as int,
-        title: j['title'] as String,
-        ownerId: j['owner_id'] as int,
-        createdAt: j['created_at'] as String?,
-      );
+    id: j['id'] as int,
+    title: j['title'] as String,
+    ownerId: j['owner_id'] as int,
+    createdAt: j['created_at'] as String?,
+  );
 
   final int id;
   final String title;
@@ -37,17 +37,17 @@ class BoardDetail {
   });
 
   factory BoardDetail.fromJson(Map<String, dynamic> j) => BoardDetail(
-        id: j['id'] as int,
-        title: j['title'] as String,
-        ownerId: j['owner_id'] as int,
-        boardVersion: (j['board_version'] as num?)?.toInt(),
-        columns: (j['columns'] as List)
-            .map((e) => ColumnItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-        cards: (j['cards'] as List)
-            .map((e) => CardItem.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    id: j['id'] as int,
+    title: j['title'] as String,
+    ownerId: j['owner_id'] as int,
+    boardVersion: (j['board_version'] as num?)?.toInt(),
+    columns: (j['columns'] as List)
+        .map((e) => ColumnItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    cards: (j['cards'] as List)
+        .map((e) => CardItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 
   final int id;
   final String title;
@@ -67,11 +67,11 @@ class ColumnItem {
   });
 
   factory ColumnItem.fromJson(Map<String, dynamic> j) => ColumnItem(
-        id: j['id'] as int,
-        title: j['title'] as String,
-        position: j['position'] as int,
-        isDone: j['is_done'] as bool? ?? false,
-      );
+    id: j['id'] as int,
+    title: j['title'] as String,
+    position: j['position'] as int,
+    isDone: j['is_done'] as bool? ?? false,
+  );
 
   final int id;
   final String title;
@@ -91,19 +91,25 @@ class CardItem {
     this.dueDate,
     this.status = 'active',
     this.position = 0,
+    this.mentionedUserIds = const [],
   });
 
   factory CardItem.fromJson(Map<String, dynamic> j) => CardItem(
-        id: j['id'] as int,
-        columnId: j['column_id'] as int,
-        title: j['title'] as String,
-        description: j['description'] as String? ?? '',
-        priority: j['priority'] as String? ?? 'medium',
-        assigneeId: j['assignee_id'] as int?,
-        dueDate: j['due_date'] as String?,
-        status: j['status'] as String? ?? 'active',
-        position: j['position'] as int? ?? 0,
-      );
+    id: j['id'] as int,
+    columnId: j['column_id'] as int,
+    title: j['title'] as String,
+    description: j['description'] as String? ?? '',
+    priority: j['priority'] as String? ?? 'medium',
+    assigneeId: j['assignee_id'] as int?,
+    dueDate: j['due_date'] as String?,
+    status: j['status'] as String? ?? 'active',
+    position: j['position'] as int? ?? 0,
+    mentionedUserIds:
+        (j['mentioned_user_ids'] as List?)
+            ?.map((e) => (e as num).toInt())
+            .toList() ??
+        const [],
+  );
 
   CardItem copyWith({
     int? id,
@@ -115,18 +121,19 @@ class CardItem {
     String? dueDate,
     String? status,
     int? position,
-  }) =>
-      CardItem(
-        id: id ?? this.id,
-        columnId: columnId ?? this.columnId,
-        title: title ?? this.title,
-        description: description ?? this.description,
-        priority: priority ?? this.priority,
-        assigneeId: assigneeId ?? this.assigneeId,
-        dueDate: dueDate ?? this.dueDate,
-        status: status ?? this.status,
-        position: position ?? this.position,
-      );
+    List<int>? mentionedUserIds,
+  }) => CardItem(
+    id: id ?? this.id,
+    columnId: columnId ?? this.columnId,
+    title: title ?? this.title,
+    description: description ?? this.description,
+    priority: priority ?? this.priority,
+    assigneeId: assigneeId ?? this.assigneeId,
+    dueDate: dueDate ?? this.dueDate,
+    status: status ?? this.status,
+    position: position ?? this.position,
+    mentionedUserIds: mentionedUserIds ?? this.mentionedUserIds,
+  );
 
   final int id;
   final int columnId;
@@ -137,6 +144,7 @@ class CardItem {
   final String? dueDate;
   final String status;
   final int position;
+  final List<int> mentionedUserIds;
 
   /// priority 색상
   Color get priorityColor {

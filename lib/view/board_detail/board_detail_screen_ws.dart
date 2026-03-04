@@ -82,7 +82,8 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       final bid = (data['board_id'] as num?)?.toInt();
       final title = data['title'] as String?;
       if (bid == widget.boardId && title != null && title.isNotEmpty) {
-        ref.read(boardTitleOverrideProvider(widget.boardId).notifier).state = title;
+        ref.read(boardTitleOverrideProvider(widget.boardId).notifier).state =
+            title;
         ref.invalidate(boardDetailProvider(widget.boardId));
         ref.read(boardListNotifierProvider.notifier).refresh();
       }
@@ -106,12 +107,14 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         final pendingReqIds = Set<String>.from(
           ref.read(pendingMoveReqIdsProvider(widget.boardId)),
         )..remove(reqId);
-        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = pendingReqIds;
+        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state =
+            pendingReqIds;
 
         final retryMap = Map<String, int>.from(
           ref.read(pendingMoveRetryCountProvider(widget.boardId)),
         )..remove(reqId);
-        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state =
+            retryMap;
       }
       if (code == 'LOCKED' && detail != null) {
         final cardId = (detail['card_id'] as num?)?.toInt();
@@ -135,7 +138,9 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         }
       }
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
       }
       return;
     }
@@ -149,9 +154,12 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
 
     if (isCardMoved) {
       final columnId = (data['column_id'] as num?)?.toInt();
-      final incomingMovedAt = (data['updated_at'] as num?)?.toInt() ?? incomingVersion;
+      final incomingMovedAt =
+          (data['updated_at'] as num?)?.toInt() ?? incomingVersion;
       if (columnId != null && incomingMovedAt != null) {
-        final lastByColumn = ref.read(lastAppliedMoveEventAtProvider(widget.boardId));
+        final lastByColumn = ref.read(
+          lastAppliedMoveEventAtProvider(widget.boardId),
+        );
         final lastMovedAt = lastByColumn[columnId];
         if (lastMovedAt != null && incomingMovedAt < lastMovedAt) {
           debugPrint(
@@ -166,30 +174,41 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         incomingVersion != null &&
         currentVersion != null &&
         incomingVersion < currentVersion) {
-      debugPrint('[동기화] 구버전 이벤트 무시: incoming=$incomingVersion current=$currentVersion type=$type');
+      debugPrint(
+        '[동기화] 구버전 이벤트 무시: incoming=$incomingVersion current=$currentVersion type=$type',
+      );
       return;
     }
     if (incomingVersion != null &&
         (currentVersion == null || incomingVersion > currentVersion)) {
-      ref.read(boardVersionProvider(widget.boardId).notifier).state = incomingVersion;
+      ref.read(boardVersionProvider(widget.boardId).notifier).state =
+          incomingVersion;
     }
 
     const cardTypes = [
-      'CARD_CREATED', 'CARD_MOVED', 'CARD_UPDATED',
-      'CARD_ARCHIVED', 'CARD_RESTORED',
+      'CARD_CREATED',
+      'CARD_MOVED',
+      'CARD_UPDATED',
+      'CARD_ARCHIVED',
+      'CARD_RESTORED',
     ];
     if (cardTypes.contains(type)) {
       final reqId = msg['req_id'] as String?;
       final pendingReqIds = ref.read(pendingMoveReqIdsProvider(widget.boardId));
-      final isAckForMyMove = type == 'CARD_MOVED' && reqId != null && pendingReqIds.contains(reqId);
+      final isAckForMyMove =
+          type == 'CARD_MOVED' &&
+          reqId != null &&
+          pendingReqIds.contains(reqId);
 
       if (isAckForMyMove) {
         final nextPending = Set<String>.from(pendingReqIds)..remove(reqId);
-        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = nextPending;
+        ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state =
+            nextPending;
         final retryMap = Map<String, int>.from(
           ref.read(pendingMoveRetryCountProvider(widget.boardId)),
         )..remove(reqId);
-        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state =
+            retryMap;
         _applyCardMoved(data);
         return;
       }
@@ -227,7 +246,9 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         // build 단계 중 provider state 변경을 피하기 위해 프레임 이후 반영
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (!mounted) return;
-          final pendingReqIds = ref.read(pendingMoveReqIdsProvider(widget.boardId));
+          final pendingReqIds = ref.read(
+            pendingMoveReqIdsProvider(widget.boardId),
+          );
           if (pendingReqIds.isNotEmpty) {
             // 아직 ACK 대기 중인 이동이 있으면 낙관적 상태 유지
             return;
@@ -237,19 +258,31 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
           final newVersion = detail.boardVersion ?? 0;
           final currentVersion = current?.boardVersion ?? 0;
           if (current != null && newVersion < currentVersion) {
-            debugPrint('[동기화] refetch 스킵(캐시가 더 최신): new=$newVersion current=$currentVersion');
+            debugPrint(
+              '[동기화] refetch 스킵(캐시가 더 최신): new=$newVersion current=$currentVersion',
+            );
             return;
           }
-          ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = detail;
-          ref.read(boardVersionProvider(widget.boardId).notifier).state = detail.boardVersion;
-          final hadMoves = ref.read(optimisticCardMovesProvider(widget.boardId)).isNotEmpty;
-          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = {};
+          ref.read(boardDetailCacheProvider(widget.boardId).notifier).state =
+              detail;
+          ref.read(boardVersionProvider(widget.boardId).notifier).state =
+              detail.boardVersion;
+          final hadMoves = ref
+              .read(optimisticCardMovesProvider(widget.boardId))
+              .isNotEmpty;
+          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+              {};
           if (hadMoves) {
             for (final col in detail.columns) {
-              final colCards = detail.cards.where((c) => c.columnId == col.id).toList()
-                ..sort((a, b) => a.position.compareTo(b.position));
-              final cardsStr = colCards.map((c) => 'id:${c.id}:pos:${c.position}').join(', ');
-              debugPrint('[카드이동] 서버 데이터 수신 → 낙관적 초기화 | columnId=${col.id} cards=$cardsStr');
+              final colCards =
+                  detail.cards.where((c) => c.columnId == col.id).toList()
+                    ..sort((a, b) => a.position.compareTo(b.position));
+              final cardsStr = colCards
+                  .map((c) => 'id:${c.id}:pos:${c.position}')
+                  .join(', ');
+              debugPrint(
+                '[카드이동] 서버 데이터 수신 → 낙관적 초기화 | columnId=${col.id} cards=$cardsStr',
+              );
             }
           }
         });
@@ -270,20 +303,24 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       return;
     }
 
-    final nextCards = current.cards.where((c) => c.id != incoming.id).toList()..add(incoming);
+    final nextCards = current.cards.where((c) => c.id != incoming.id).toList()
+      ..add(incoming);
     nextCards.sort((a, b) {
       final byColumn = a.columnId.compareTo(b.columnId);
       if (byColumn != 0) return byColumn;
       return a.position.compareTo(b.position);
     });
 
-    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+    ref
+        .read(boardDetailCacheProvider(widget.boardId).notifier)
+        .state = BoardDetail(
       id: current.id,
       title: current.title,
       ownerId: current.ownerId,
       columns: current.columns,
       cards: nextCards,
-      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+      boardVersion:
+          (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
   }
 
@@ -296,11 +333,13 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
 
     final members = membersRaw
         .whereType<Map>()
-        .map((e) => PresenceMember(
-              userId: (e['user_id'] as num).toInt(),
-              display: (e['display'] as String?) ?? 'user',
-              email: e['email'] as String?,
-            ))
+        .map(
+          (e) => PresenceMember(
+            userId: (e['user_id'] as num).toInt(),
+            display: (e['display'] as String?) ?? 'user',
+            email: e['email'] as String?,
+          ),
+        )
         .toList();
     ref.read(presenceMembersProvider(widget.boardId).notifier).state = members;
   }
@@ -387,10 +426,12 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
 
     final order = (data['column_cards'] as List?)
         ?.whereType<Map>()
-        .map((e) => {
-              'id': (e['id'] as num?)?.toInt(),
-              'position': (e['position'] as num?)?.toInt(),
-            })
+        .map(
+          (e) => {
+            'id': (e['id'] as num?)?.toInt(),
+            'position': (e['position'] as num?)?.toInt(),
+          },
+        )
         .where((e) => e['id'] != null && e['position'] != null)
         .toList();
 
@@ -403,10 +444,7 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
 
     final nextCards = current.cards.map((c) {
       if (c.id == cardId) {
-        return c.copyWith(
-          columnId: columnId,
-          position: position,
-        );
+        return c.copyWith(columnId: columnId, position: position);
       }
       final normalized = positionMap[c.id];
       if (normalized != null && c.columnId == columnId) {
@@ -421,16 +459,21 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       return a.position.compareTo(b.position);
     });
 
-    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+    ref
+        .read(boardDetailCacheProvider(widget.boardId).notifier)
+        .state = BoardDetail(
       id: current.id,
       title: current.title,
       ownerId: current.ownerId,
       columns: current.columns,
       cards: nextCards,
-      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+      boardVersion:
+          (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
 
-    final movedAt = (data['updated_at'] as num?)?.toInt() ?? (data['board_version'] as num?)?.toInt();
+    final movedAt =
+        (data['updated_at'] as num?)?.toInt() ??
+        (data['board_version'] as num?)?.toInt();
     if (movedAt != null) {
       final byColumn = Map<int, int>.from(
         ref.read(lastAppliedMoveEventAtProvider(widget.boardId)),
@@ -438,7 +481,10 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       final currentMovedAt = byColumn[columnId];
       if (currentMovedAt == null || movedAt >= currentMovedAt) {
         byColumn[columnId] = movedAt;
-        ref.read(lastAppliedMoveEventAtProvider(widget.boardId).notifier).state = byColumn;
+        ref
+                .read(lastAppliedMoveEventAtProvider(widget.boardId).notifier)
+                .state =
+            byColumn;
       }
     }
 
@@ -448,7 +494,8 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
         ref.read(optimisticCardMovesProvider(widget.boardId)),
       );
       optimistic.removeWhere((id, _) => confirmedIds.contains(id));
-      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = optimistic;
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+          optimistic;
     }
   }
 
@@ -468,11 +515,27 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       if (c.id != cardId) return c;
       return c.copyWith(
         title: patch.containsKey('title') ? (patch['title'] as String?) : null,
-        description: patch.containsKey('description') ? (patch['description'] as String?) : null,
-        priority: patch.containsKey('priority') ? (patch['priority'] as String?) : null,
-        columnId: patch.containsKey('column_id') ? (patch['column_id'] as int?) : null,
-        position: patch.containsKey('position') ? (patch['position'] as int?) : null,
-        status: patch.containsKey('status') ? (patch['status'] as String?) : null,
+        description: patch.containsKey('description')
+            ? (patch['description'] as String?)
+            : null,
+        priority: patch.containsKey('priority')
+            ? (patch['priority'] as String?)
+            : null,
+        columnId: patch.containsKey('column_id')
+            ? (patch['column_id'] as int?)
+            : null,
+        position: patch.containsKey('position')
+            ? (patch['position'] as int?)
+            : null,
+        status: patch.containsKey('status')
+            ? (patch['status'] as String?)
+            : null,
+        mentionedUserIds: patch.containsKey('mentioned_user_ids')
+            ? (patch['mentioned_user_ids'] as List?)
+                      ?.map((e) => (e as num).toInt())
+                      .toList() ??
+                  const []
+            : null,
       );
     }).toList();
 
@@ -482,13 +545,16 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
       return a.position.compareTo(b.position);
     });
 
-    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+    ref
+        .read(boardDetailCacheProvider(widget.boardId).notifier)
+        .state = BoardDetail(
       id: current.id,
       title: current.title,
       ownerId: current.ownerId,
       columns: current.columns,
       cards: nextCards,
-      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+      boardVersion:
+          (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
   }
 
@@ -503,13 +569,16 @@ class _BoardWsBridgeState extends ConsumerState<_BoardWsBridge> {
     }
 
     final nextCards = current.cards.where((c) => c.id != cardId).toList();
-    ref.read(boardDetailCacheProvider(widget.boardId).notifier).state = BoardDetail(
+    ref
+        .read(boardDetailCacheProvider(widget.boardId).notifier)
+        .state = BoardDetail(
       id: current.id,
       title: current.title,
       ownerId: current.ownerId,
       columns: current.columns,
       cards: nextCards,
-      boardVersion: (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
+      boardVersion:
+          (data['board_version'] as num?)?.toInt() ?? current.boardVersion,
     );
   }
 

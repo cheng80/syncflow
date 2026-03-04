@@ -20,14 +20,13 @@ class CardHandler {
     String? description,
     required int columnId,
     String priority = 'medium',
-  }) =>
-      _client.createCard(
-        sessionToken,
-        title: title,
-        description: description,
-        columnId: columnId,
-        priority: priority,
-      );
+  }) => _client.createCard(
+    sessionToken,
+    title: title,
+    description: description,
+    columnId: columnId,
+    priority: priority,
+  );
 
   Future<CardItem> updateCard(
     String sessionToken,
@@ -36,17 +35,18 @@ class CardHandler {
     String? description,
     int? columnId,
     String? priority,
+    String? status,
     int? position,
-  }) =>
-      _client.updateCard(
-        sessionToken,
-        cardId,
-        title: title,
-        description: description,
-        columnId: columnId,
-        priority: priority,
-        position: position,
-      );
+  }) => _client.updateCard(
+    sessionToken,
+    cardId,
+    title: title,
+    description: description,
+    columnId: columnId,
+    priority: priority,
+    status: status,
+    position: position,
+  );
 
   Future<void> archiveCard(String sessionToken, int cardId) =>
       _client.archiveCard(sessionToken, cardId);

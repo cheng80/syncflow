@@ -20,6 +20,7 @@ class _ColumnView extends ConsumerStatefulWidget {
     required this.columns,
     required this.boardId,
     required this.onRefresh,
+    this.mentionOnlyMode = false,
   });
 
   final ColumnItem column;
@@ -27,6 +28,7 @@ class _ColumnView extends ConsumerStatefulWidget {
   final List<ColumnItem> columns;
   final int boardId;
   final VoidCallback onRefresh;
+  final bool mentionOnlyMode;
 
   @override
   ConsumerState<_ColumnView> createState() => _ColumnViewState();
@@ -48,7 +50,9 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   void didUpdateWidget(_ColumnView oldWidget) {
     super.didUpdateWidget(oldWidget);
     final changed = !_listEquals(widget.cards, oldWidget.cards);
-    debugPrint('[카드이동] didUpdateWidget col=${widget.column.id} changed=$changed');
+    debugPrint(
+      '[카드이동] didUpdateWidget col=${widget.column.id} changed=$changed',
+    );
     if (changed) {
       _displayCards = List.from(widget.cards);
     }
@@ -64,9 +68,18 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
           a[i].title != b[i].title ||
           a[i].description != b[i].description ||
           a[i].priority != b[i].priority ||
-          a[i].status != b[i].status) {
+          a[i].status != b[i].status ||
+          !_intListEquals(a[i].mentionedUserIds, b[i].mentionedUserIds)) {
         return false;
       }
+    }
+    return true;
+  }
+
+  bool _intListEquals(List<int> a, List<int> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
     }
     return true;
   }
@@ -79,7 +92,9 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       useSafeArea: true,
       builder: (ctx) => ConstrainedBox(
         constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(ctx).size.height * ConfigUI.addCardSheetMaxHeightFactor,
+          maxHeight:
+              MediaQuery.of(ctx).size.height *
+              ConfigUI.addCardSheetMaxHeightFactor,
         ),
         child: _AddCardSheet(
           columnId: widget.column.id,
@@ -94,17 +109,23 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
+    final myUserId = ref.watch(sessionNotifierProvider).value?.userId;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          margin: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
+          margin: const EdgeInsets.symmetric(
+            horizontal: ConfigUI.screenPaddingH,
+          ),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: p.primary.withValues(alpha: 0.15),
             borderRadius: ConfigUI.cardRadius,
-            border: Border.all(color: p.borderBrutal, width: ConfigUI.borderWidthBrutal),
+            border: Border.all(
+              color: p.borderBrutal,
+              width: ConfigUI.borderWidthBrutal,
+            ),
           ),
           child: Row(
             children: [
@@ -117,80 +138,159 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
                 ),
               ),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.add),
-                onPressed: _showAddCardDialog,
-                tooltip: context.tr('cardAdd'),
-              ),
+              if (!widget.mentionOnlyMode)
+                IconButton(
+                  icon: const Icon(Icons.add),
+                  onPressed: _showAddCardDialog,
+                  tooltip: context.tr('cardAdd'),
+                ),
             ],
           ),
         ),
         const SizedBox(height: ConfigUI.gapColumnHeaderToCards),
         Expanded(
-          child: ReorderableListView.builder(
-            padding: EdgeInsets.only(
-              left: ConfigUI.screenPaddingH,
-              right: ConfigUI.screenPaddingH,
-              top: 0,
-              bottom: ConfigUI.gapBetweenCards,
-            ),
-            itemCount: _displayCards.length + 1,
-            onReorder: (oldIndex, newIndex) => _onReorder(oldIndex, newIndex),
-            proxyDecorator: (child, index, animation) {
-              final scale = Tween<double>(begin: 1, end: 1.04).animate(animation);
-              return AnimatedBuilder(
-                animation: animation,
-                builder: (context, childWidget) => Transform.scale(
-                  scale: scale.value,
-                  child: Material(
-                    elevation: ConfigUI.elevationDragProxy,
-                    borderRadius: ConfigUI.cardRadius,
-                    child: child,
+          child: widget.mentionOnlyMode
+              ? _buildMentionOnlyList(myUserId)
+              : ReorderableListView.builder(
+                  padding: EdgeInsets.only(
+                    left: ConfigUI.screenPaddingH,
+                    right: ConfigUI.screenPaddingH,
+                    top: 0,
+                    bottom: ConfigUI.gapBetweenCards,
                   ),
+                  itemCount: _displayCards.length + 1,
+                  onReorder: (oldIndex, newIndex) =>
+                      _onReorder(oldIndex, newIndex),
+                  proxyDecorator: (child, index, animation) {
+                    final scale = Tween<double>(
+                      begin: 1,
+                      end: 1.04,
+                    ).animate(animation);
+                    return AnimatedBuilder(
+                      animation: animation,
+                      builder: (context, childWidget) => Transform.scale(
+                        scale: scale.value,
+                        child: Material(
+                          elevation: ConfigUI.elevationDragProxy,
+                          borderRadius: ConfigUI.cardRadius,
+                          child: child,
+                        ),
+                      ),
+                    );
+                  },
+                  buildDefaultDragHandles: true,
+                  itemBuilder: (context, index) {
+                    if (index == _displayCards.length) {
+                      return Padding(
+                        key: const ValueKey('add-button'),
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: OutlinedButton.icon(
+                          onPressed: _showAddCardDialog,
+                          icon: const Icon(Icons.add, size: 20),
+                          label: Text(context.tr('cardAdd')),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                        ),
+                      );
+                    }
+                    final card = _displayCards[index];
+                    return Padding(
+                      key: ValueKey(card.id),
+                      padding: const EdgeInsets.only(
+                        bottom: ConfigUI.gapBetweenCards,
+                      ),
+                      child: CardTile(
+                        card: card,
+                        onTap: () => _showCardDetail(card),
+                        onRefresh: widget.onRefresh,
+                        onToggleDone: (nextDone) =>
+                            _toggleCardDone(card, nextDone),
+                        showMentionBadge:
+                            myUserId != null &&
+                            card.mentionedUserIds.contains(myUserId),
+                        onMove: widget.columns.length > 1
+                            ? () => showMoveCardSheet(
+                                context,
+                                boardId: widget.boardId,
+                                card: card,
+                                fromColumnId: widget.column.id,
+                                columns: widget.columns,
+                                onRefresh: widget.onRefresh,
+                              )
+                            : null,
+                      ),
+                    );
+                  },
                 ),
-              );
-            },
-            buildDefaultDragHandles: true,
-            itemBuilder: (context, index) {
-              if (index == _displayCards.length) {
-                return Padding(
-                  key: const ValueKey('add-button'),
-                  padding: const EdgeInsets.only(bottom: 24),
-                  child: OutlinedButton.icon(
-                    onPressed: _showAddCardDialog,
-                    icon: const Icon(Icons.add, size: 20),
-                    label: Text(context.tr('cardAdd')),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                );
-              }
-              final card = _displayCards[index];
-              return Padding(
-                key: ValueKey(card.id),
-                padding: const EdgeInsets.only(bottom: ConfigUI.gapBetweenCards),
-                child: CardTile(
-                  card: card,
-                  onTap: () => _showCardDetail(card),
-                  onRefresh: widget.onRefresh,
-                  onMove: widget.columns.length > 1
-                      ? () => showMoveCardSheet(
-                            context,
-                            boardId: widget.boardId,
-                            card: card,
-                            fromColumnId: widget.column.id,
-                            columns: widget.columns,
-                            onRefresh: widget.onRefresh,
-                          )
-                      : null,
-                ),
-              );
-            },
-          ),
         ),
       ],
     );
+  }
+
+  Widget _buildMentionOnlyList(int? myUserId) {
+    if (_displayCards.isEmpty) {
+      return Center(child: Text(context.tr('mentionOnlyEmpty')));
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.only(
+        left: ConfigUI.screenPaddingH,
+        right: ConfigUI.screenPaddingH,
+        top: 0,
+        bottom: ConfigUI.gapBetweenCards,
+      ),
+      itemCount: _displayCards.length,
+      itemBuilder: (context, index) {
+        final card = _displayCards[index];
+        return Padding(
+          key: ValueKey(card.id),
+          padding: const EdgeInsets.only(bottom: ConfigUI.gapBetweenCards),
+          child: CardTile(
+            card: card,
+            onTap: () => _showCardDetail(card),
+            onRefresh: widget.onRefresh,
+            onToggleDone: (nextDone) => _toggleCardDone(card, nextDone),
+            showMentionBadge:
+                myUserId != null && card.mentionedUserIds.contains(myUserId),
+            onMove: null,
+          ),
+        );
+      },
+    );
+  }
+
+  /// 카드 완료 상태(active/done)를 토글한다.
+  Future<void> _toggleCardDone(CardItem card, bool nextDone) async {
+    final nextStatus = nextDone ? 'done' : 'active';
+    if (card.status == nextStatus) return;
+
+    final ws = ref.read(wsServiceProvider);
+    if (ws.isConnected) {
+      final reqId =
+          'status_${widget.boardId}_${card.id}_${DateTime.now().microsecondsSinceEpoch}';
+      await ws.updateCard(
+        boardId: widget.boardId,
+        cardId: card.id,
+        patch: {'status': nextStatus},
+        reqId: reqId,
+      );
+      return;
+    }
+
+    final token = ref.read(sessionNotifierProvider).value?.sessionToken;
+    if (token == null) return;
+    try {
+      await ref
+          .read(cardHandlerProvider)
+          .updateCard(token, card.id, status: nextStatus);
+      widget.onRefresh();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   /// 드래그 재정렬을 처리한다.
@@ -198,17 +298,23 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   Future<void> _onReorder(int oldIndex, int newIndex) async {
     final session = ref.read(sessionNotifierProvider).value;
     final userId = session?.userId ?? -1;
-    debugPrint('[카드이동] _onReorder START old=$oldIndex new=$newIndex cards=${_displayCards.length}');
+    debugPrint(
+      '[카드이동] _onReorder START old=$oldIndex new=$newIndex cards=${_displayCards.length}',
+    );
 
     if (oldIndex >= _displayCards.length) {
-      debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(범위초과, cards=${_displayCards.length})');
+      debugPrint(
+        '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(범위초과, cards=${_displayCards.length})',
+      );
       return;
     }
     if (newIndex > _displayCards.length) {
       newIndex = _displayCards.length;
     }
     if (oldIndex == newIndex) {
-      debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(동일위치)');
+      debugPrint(
+        '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex → 스킵(동일위치)',
+      );
       return;
     }
     if (newIndex > oldIndex) newIndex--;
@@ -228,11 +334,15 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     );
     _displayCards = normalized;
     setState(() {}); // 즉시 UI 반영
-    debugPrint('[카드이동] _onReorder setState done order=${_displayCards.map((c) => '${c.id}:${c.position}').join(',')}');
+    debugPrint(
+      '[카드이동] _onReorder setState done order=${_displayCards.map((c) => '${c.id}:${c.position}').join(',')}',
+    );
     final newPosition = requestPosition;
     final affectedCardIds = normalized.map((c) => c.id).toSet();
 
-    debugPrint('[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex | cardId=${movedCard.id} columnId=${widget.column.id} position=$newPosition');
+    debugPrint(
+      '[카드이동] 사용자:$userId - 원인덱스:$oldIndex - 이동인덱스:$newIndex | cardId=${movedCard.id} columnId=${widget.column.id} position=$newPosition',
+    );
 
     // 1. 낙관적 업데이트: 변경된 컬럼의 카드 전체를 일관된 순서로 반영
     final optimistic = Map<int, OptimisticCardMove>.from(
@@ -244,7 +354,8 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
         position: card.position,
       );
     }
-    ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = optimistic;
+    ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+        optimistic;
 
     final ws = ref.read(wsServiceProvider);
     if (ws.isConnected) {
@@ -284,20 +395,25 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
           final pending = Set<String>.from(
             ref.read(pendingMoveReqIdsProvider(widget.boardId)),
           )..remove(reqId);
-          ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = pending;
+          ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state =
+              pending;
           final retryMap = Map<String, int>.from(
             ref.read(pendingMoveRetryCountProvider(widget.boardId)),
           )..remove(reqId);
-          ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+          ref
+                  .read(pendingMoveRetryCountProvider(widget.boardId).notifier)
+                  .state =
+              retryMap;
           final rollback = Map<int, OptimisticCardMove>.from(
             ref.read(optimisticCardMovesProvider(widget.boardId)),
           );
           rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
-          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+          ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+              rollback;
           widget.onRefresh();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(context.tr('cardMoveFailed'))),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(context.tr('cardMoveFailed'))));
         }
       }
       return;
@@ -311,23 +427,27 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
         ref.read(optimisticCardMovesProvider(widget.boardId)),
       );
       rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
-      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+          rollback;
       widget.onRefresh();
       return;
     }
     debugPrint('[카드이동] 사용자:$userId - REST API updateCard 호출');
     try {
-      await ref.read(cardHandlerProvider).updateCard(
-        token,
-        movedCard.id,
-        columnId: widget.column.id,
-        position: newPosition,
-      );
+      await ref
+          .read(cardHandlerProvider)
+          .updateCard(
+            token,
+            movedCard.id,
+            columnId: widget.column.id,
+            position: newPosition,
+          );
       final committed = Map<int, OptimisticCardMove>.from(
         ref.read(optimisticCardMovesProvider(widget.boardId)),
       );
       committed.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
-      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = committed;
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+          committed;
       debugPrint('[카드이동] 사용자:$userId - REST 성공');
       widget.onRefresh();
     } on ApiException catch (e) {
@@ -337,9 +457,12 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
           ref.read(optimisticCardMovesProvider(widget.boardId)),
         );
         rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
-        ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+        ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+            rollback;
         widget.onRefresh();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     }
   }
@@ -381,7 +504,10 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
   }
 
   /// 이동 대상 기준 이웃 카드(before/after) ID를 계산한다.
-  (int?, int?) _computeNeighborIds(List<CardItem> reorderedCards, int newIndex) {
+  (int?, int?) _computeNeighborIds(
+    List<CardItem> reorderedCards,
+    int newIndex,
+  ) {
     final beforeId = newIndex > 0 ? reorderedCards[newIndex - 1].id : null;
     final afterId = newIndex < reorderedCards.length - 1
         ? reorderedCards[newIndex + 1].id
@@ -412,7 +538,8 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
 
       if (retryCount < 1) {
         retryMap[reqId] = retryCount + 1;
-        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+        ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state =
+            retryMap;
         try {
           debugPrint('[카드이동] ACK 타임아웃 → 재전송(req_id=$reqId)');
           await sendMove();
@@ -431,22 +558,25 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       final nextPending = Set<String>.from(
         ref.read(pendingMoveReqIdsProvider(widget.boardId)),
       )..remove(reqId);
-      ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state = nextPending;
+      ref.read(pendingMoveReqIdsProvider(widget.boardId).notifier).state =
+          nextPending;
 
       retryMap.remove(reqId);
-      ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state = retryMap;
+      ref.read(pendingMoveRetryCountProvider(widget.boardId).notifier).state =
+          retryMap;
 
       final rollback = Map<int, OptimisticCardMove>.from(
         ref.read(optimisticCardMovesProvider(widget.boardId)),
       );
       rollback.removeWhere((cardId, _) => affectedCardIds.contains(cardId));
-      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state = rollback;
+      ref.read(optimisticCardMovesProvider(widget.boardId).notifier).state =
+          rollback;
 
       ref.invalidate(boardDetailProvider(widget.boardId));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.tr('syncRefresh'))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(context.tr('syncRefresh'))));
       }
     });
   }
@@ -500,24 +630,32 @@ class _AddCardSheetState extends ConsumerState<_AddCardSheet> {
           boardId: widget.boardId,
           columnId: widget.columnId,
           title: title,
-          description: _descController.text.trim().isEmpty ? '' : _descController.text.trim(),
+          description: _descController.text.trim().isEmpty
+              ? ''
+              : _descController.text.trim(),
           reqId: reqId,
         );
         widget.onSaved();
         return;
       }
 
-      await ref.read(cardHandlerProvider).createCard(
-        token,
-        title: title,
-        description: _descController.text.trim().isEmpty ? null : _descController.text.trim(),
-        columnId: widget.columnId,
-      );
+      await ref
+          .read(cardHandlerProvider)
+          .createCard(
+            token,
+            title: title,
+            description: _descController.text.trim().isEmpty
+                ? null
+                : _descController.text.trim(),
+            columnId: widget.columnId,
+          );
       ref.invalidate(boardDetailProvider(widget.boardId));
       widget.onSaved();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);

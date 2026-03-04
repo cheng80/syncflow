@@ -30,10 +30,7 @@ class BoardDetailHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: onBack,
-              ),
+              IconButton(icon: const Icon(Icons.arrow_back), onPressed: onBack),
               Expanded(
                 child: Center(
                   child: Text(
@@ -49,7 +46,10 @@ class BoardDetailHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              if (isOwner && menuButton != null) menuButton! else const SizedBox(width: 48),
+              if (isOwner && menuButton != null)
+                menuButton!
+              else
+                const SizedBox(width: 48),
             ],
           ),
           const SizedBox(height: 8),
@@ -71,6 +71,7 @@ class BoardDetailColumnTabsBar extends StatelessWidget {
     required this.onTapColumn,
     required this.isOwner,
     this.manageButton,
+    this.filterRow,
   });
 
   final List<ColumnItem> columns;
@@ -79,32 +80,57 @@ class BoardDetailColumnTabsBar extends StatelessWidget {
   final bool isOwner;
   final Widget? manageButton;
 
+  /// 아랫줄 필터 (맨션만 보기, 완료/미완료 등). null이면 미표시.
+  final Widget? filterRow;
+
   @override
   Widget build(BuildContext context) {
+    final p = context.appTheme;
     return Padding(
       padding: const EdgeInsets.symmetric(
         horizontal: ConfigUI.screenPaddingH,
         vertical: 8,
       ),
-      child: Row(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: List.generate(columns.length, (index) {
-                  return _ColumnTab(
-                    label: columns[index].title,
-                    isSelected: currentIndex == index,
-                    onTap: () => onTapColumn(index),
-                  );
-                }),
+          Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: List.generate(columns.length, (index) {
+                      return _ColumnTab(
+                        label: columns[index].title,
+                        isSelected: currentIndex == index,
+                        onTap: () => onTapColumn(index),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+              if (isOwner && manageButton != null) ...[
+                const SizedBox(width: 8),
+                manageButton!,
+              ],
+            ],
+          ),
+          if (filterRow != null) ...[
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: p.background,
+                borderRadius: ConfigUI.cardRadius,
+                border: Border.all(color: p.divider),
+              ),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: filterRow!,
               ),
             ),
-          ),
-          if (isOwner && manageButton != null) ...[
-            const SizedBox(width: 8),
-            manageButton!,
           ],
         ],
       ),
@@ -134,10 +160,14 @@ class _ColumnTab extends StatelessWidget {
           duration: ConfigUI.durationShort,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? p.primary.withValues(alpha: 0.2) : p.cardBackground,
+            color: isSelected
+                ? p.primary.withValues(alpha: 0.2)
+                : p.cardBackground,
             borderRadius: ConfigUI.chipRadius,
             border: Border.all(
-              color: isSelected ? p.primary : p.textSecondary.withValues(alpha: 0.3),
+              color: isSelected
+                  ? p.primary
+                  : p.textSecondary.withValues(alpha: 0.3),
               width: isSelected ? 2 : 1,
             ),
           ),

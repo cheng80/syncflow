@@ -18,17 +18,23 @@ class CardTile extends StatelessWidget {
     required this.onTap,
     required this.onRefresh,
     this.onMove,
+    this.onToggleDone,
+    this.showMentionBadge = false,
   });
 
   final CardItem card;
   final VoidCallback onTap;
   final VoidCallback onRefresh;
+
   /// 컬럼 간 이동 모드 진입 (null이면 이동 아이콘 미표시)
   final VoidCallback? onMove;
+  final ValueChanged<bool>? onToggleDone;
+  final bool showMentionBadge;
 
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
+    final isDone = card.status == 'done';
 
     return Material(
       color: Colors.transparent,
@@ -40,7 +46,10 @@ class CardTile extends StatelessWidget {
           decoration: BoxDecoration(
             color: p.cardBackground,
             borderRadius: ConfigUI.cardRadius,
-            border: Border.all(color: p.borderBrutal, width: ConfigUI.borderWidthBrutal),
+            border: Border.all(
+              color: p.borderBrutal,
+              width: ConfigUI.borderWidthBrutal,
+            ),
             boxShadow: ConfigUI.shadowOffsetBrutalCard(p.borderBrutal),
           ),
           child: Column(
@@ -48,13 +57,20 @@ class CardTile extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  Checkbox(
+                    value: isDone,
+                    onChanged: onToggleDone == null
+                        ? null
+                        : (v) => onToggleDone!(v ?? false),
+                  ),
                   Expanded(
                     child: Text(
                       card.title,
                       style: TextStyle(
                         fontSize: ConfigUI.fontSizeBody,
                         fontWeight: FontWeight.w500,
-                        color: p.textPrimary,
+                        color: isDone ? p.textSecondary : p.textPrimary,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -69,6 +85,30 @@ class CardTile extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                     ),
+                  if (showMentionBadge) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: p.primary.withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: p.primary.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      child: Text(
+                        '@ME',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: p.primary,
+                        ),
+                      ),
+                    ),
+                  ],
                   if (onMove != null) ...[
                     const SizedBox(width: 4),
                     Material(
@@ -84,7 +124,11 @@ class CardTile extends StatelessWidget {
                           message: context.tr('moveCard'),
                           child: Padding(
                             padding: const EdgeInsets.all(8),
-                            child: Icon(Icons.swap_horiz, size: 18, color: p.textSecondary),
+                            child: Icon(
+                              Icons.swap_horiz,
+                              size: 18,
+                              color: p.textSecondary,
+                            ),
                           ),
                         ),
                       ),

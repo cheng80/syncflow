@@ -11,6 +11,10 @@ from pydantic import BaseModel
 
 from app.database.connection import connect_db
 from app.utils.auth_deps import get_current_user_id
+from app.utils.mention_util import (
+    get_card_mentioned_user_ids,
+    sync_card_mentions,
+)
 from app.ws.room import broadcast_to_board
 
 router = APIRouter()
@@ -41,6 +45,7 @@ class UpdateCardRequest(BaseModel):
     description: str | None = None
     column_id: int | None = None
     priority: str | None = None
+    status: str | None = None
     position: int | None = None  # 같은 컬럼 내 재정렬용
 
 
@@ -69,7 +74,7 @@ async def create_card(
 
             # 신규 카드는 컬럼 맨 위에 삽입
             cursor.execute(
-                "SELECT MIN(position) FROM cards WHERE column_id = %s AND status = 'active'",
+                "SELECT MIN(position) FROM cards WHERE column_id = %s AND status <> 'archived'",
                 (req.column_id,),
             )
             min_pos = cursor.fetchone()[0]
@@ -97,6 +102,13 @@ async def create_card(
             cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
             cursor.execute("SELECT UNIX_TIMESTAMP(updated_at) * 1000 FROM boards WHERE id = %s", (board_id,))
             board_version = int(cursor.fetchone()[0])
+            mentioned_user_ids = sync_card_mentions(
+                cursor,
+                board_id,
+                card_id,
+                req.title.strip(),
+                req.description or "",
+            )
             conn.commit()
 
         result = {
@@ -107,6 +119,7 @@ async def create_card(
             "priority": priority,
             "status": "active",
             "position": position,
+            "mentioned_user_ids": mentioned_user_ids,
         }
         await broadcast_to_board(board_id, {
             "type": "CARD_CREATED",
@@ -128,7 +141,7 @@ async def update_card(
     try:
         with conn.cursor() as cursor:
             cursor.execute(
-                "SELECT board_id, column_id FROM cards WHERE id = %s AND status = 'active'",
+                "SELECT board_id, column_id FROM cards WHERE id = %s AND status <> 'archived'",
                 (card_id,),
             )
             row = cursor.fetchone()
@@ -156,7 +169,7 @@ async def update_card(
                 if not cursor.fetchone():
                     raise HTTPException(status_code=400, detail="유효하지 않은 컬럼입니다.")
                 cursor.execute(
-                    "SELECT COALESCE(MAX(position), 0) + 1000 FROM cards WHERE column_id = %s",
+                    "SELECT COALESCE(MAX(position), 0) + 1000 FROM cards WHERE column_id = %s AND status <> 'archived'",
                     (req.column_id,),
                 )
                 new_pos = cursor.fetchone()[0]
@@ -168,24 +181,34 @@ async def update_card(
             if req.priority is not None and req.priority in ("low", "medium", "high"):
                 updates.append("priority = %s")
                 params.append(req.priority)
+            if req.status is not None and req.status in ("active", "done", "archived"):
+                updates.append("status = %s")
+                params.append(req.status)
             if req.position is not None:
                 updates.append("position = %s")
                 params.append(req.position)
 
             if not updates:
                 cursor.execute(
-                    "SELECT id, column_id, title, description, priority, status, position FROM cards WHERE id = %s",
+                    "SELECT id, board_id, column_id, title, description, priority, status, position FROM cards WHERE id = %s",
                     (card_id,),
                 )
                 r = cursor.fetchone()
+                mentioned_user_ids = get_card_mentioned_user_ids(
+                    cursor,
+                    r[0],
+                    fallback_board_id=r[1],
+                    fallback_texts=(r[3], r[4] or ""),
+                )
                 return {
                     "id": r[0],
-                    "column_id": r[1],
-                    "title": r[2],
-                    "description": r[3] or "",
-                    "priority": r[4],
-                    "status": r[5],
-                    "position": r[6],
+                    "column_id": r[2],
+                    "title": r[3],
+                    "description": r[4] or "",
+                    "priority": r[5],
+                    "status": r[6],
+                    "position": r[7],
+                    "mentioned_user_ids": mentioned_user_ids,
                 }
 
             updates.append("updated_by = %s")
@@ -206,24 +229,39 @@ async def update_card(
             for col_id in affected_columns:
                 cursor.execute(
                     """SELECT id FROM cards
-                       WHERE column_id = %s AND board_id = %s AND status = 'active'
+                       WHERE column_id = %s AND board_id = %s AND status <> 'archived'
                        ORDER BY position, id""",
                     (col_id, board_id),
                 )
                 for i, (cid,) in enumerate(cursor.fetchall()):
                     cursor.execute("UPDATE cards SET position = %s WHERE id = %s", (i * 1000, cid))
 
-            cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
-            cursor.execute("SELECT UNIX_TIMESTAMP(updated_at) * 1000 FROM boards WHERE id = %s", (board_id,))
-            board_version = int(cursor.fetchone()[0])
-
-            conn.commit()
-
             cursor.execute(
                 "SELECT id, column_id, title, description, priority, status, position FROM cards WHERE id = %s",
                 (card_id,),
             )
             r = cursor.fetchone()
+            if req.title is not None or req.description is not None:
+                mentioned_user_ids = sync_card_mentions(
+                    cursor,
+                    board_id,
+                    card_id,
+                    r[2],
+                    r[3] or "",
+                )
+            else:
+                mentioned_user_ids = get_card_mentioned_user_ids(
+                    cursor,
+                    r[0],
+                    fallback_board_id=board_id,
+                    fallback_texts=(r[2], r[3] or ""),
+                )
+
+            cursor.execute("UPDATE boards SET updated_at = UTC_TIMESTAMP() WHERE id = %s", (board_id,))
+            cursor.execute("SELECT UNIX_TIMESTAMP(updated_at) * 1000 FROM boards WHERE id = %s", (board_id,))
+            board_version = int(cursor.fetchone()[0])
+            conn.commit()
+
             result = {
                 "id": r[0],
                 "column_id": r[1],
@@ -232,6 +270,7 @@ async def update_card(
                 "priority": r[4],
                 "status": r[5],
                 "position": r[6],
+                "mentioned_user_ids": mentioned_user_ids,
             }
         patch = {}
         if req.title is not None:
@@ -243,8 +282,12 @@ async def update_card(
             patch["position"] = result["position"]
         if req.priority is not None:
             patch["priority"] = result["priority"]
+        if req.status is not None:
+            patch["status"] = result["status"]
         if req.position is not None:
             patch["position"] = result["position"]
+        if req.title is not None or req.description is not None:
+            patch["mentioned_user_ids"] = result["mentioned_user_ids"]
         if patch:
             await broadcast_to_board(board_id, {
                 "type": "CARD_UPDATED",

@@ -44,6 +44,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
   late TextEditingController _descController;
   late final dynamic _wsService;
   bool _loading = false;
+  late String _status;
   Timer? _lockRenewTimer;
   bool _lockOwner = false;
   String? _lockMessage;
@@ -55,6 +56,7 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     _wsService = ref.read(wsServiceProvider);
     _titleController = TextEditingController(text: widget.card.title);
     _descController = TextEditingController(text: widget.card.description);
+    _status = widget.card.status;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _tryAcquireLock();
     });
@@ -74,7 +76,8 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     final userId = session?.userId;
     if (!_wsService.isConnected || userId == null) return;
 
-    final lockReqId = 'lock_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
+    final lockReqId =
+        'lock_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
     await _wsService.acquireLock(
       boardId: widget.boardId,
       cardId: widget.card.id,
@@ -102,7 +105,12 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
     final mine = me != null && lock.lockedByUserId == me;
     setState(() {
       _lockOwner = mine;
-      _lockMessage = mine ? null : context.tr('cardLockedBy', namedArgs: {'name': lock.lockedByDisplay});
+      _lockMessage = mine
+          ? null
+          : context.tr(
+              'cardLockedBy',
+              namedArgs: {'name': lock.lockedByDisplay},
+            );
     });
     if (mine) {
       _startLockRenew();
@@ -125,7 +133,10 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
   Future<void> _releaseLock() async {
     if (!_wsService.isConnected) return;
     if (!_lockOwner) return;
-    await _wsService.releaseLock(boardId: widget.boardId, cardId: widget.card.id);
+    await _wsService.releaseLock(
+      boardId: widget.boardId,
+      cardId: widget.card.id,
+    );
   }
 
   Future<void> _save() async {
@@ -140,13 +151,17 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       if (token == null) return;
 
       if (_wsService.isConnected) {
-        final reqId = 'update_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
+        final reqId =
+            'update_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
         await _wsService.updateCard(
           boardId: widget.boardId,
           cardId: widget.card.id,
           patch: {
             'title': title,
-            'description': _descController.text.trim().isEmpty ? '' : _descController.text.trim(),
+            'description': _descController.text.trim().isEmpty
+                ? ''
+                : _descController.text.trim(),
+            'status': _status,
           },
           reqId: reqId,
         );
@@ -154,21 +169,96 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
         return;
       }
 
-      await ref.read(cardHandlerProvider).updateCard(
-        token,
-        widget.card.id,
-        title: title,
-        description: _descController.text.trim().isEmpty ? '' : _descController.text.trim(),
-      );
+      await ref
+          .read(cardHandlerProvider)
+          .updateCard(
+            token,
+            widget.card.id,
+            title: title,
+            description: _descController.text.trim().isEmpty
+                ? ''
+                : _descController.text.trim(),
+            status: _status,
+          );
       widget.onRefresh();
       if (mounted) CustomNavigationUtil.back(context);
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  List<String> _detectedMentions() {
+    final source = '${_titleController.text} ${_descController.text}';
+    final regex = RegExp(r'@([^\s@,;:(){}\[\]<>]+)');
+    final seen = <String>{};
+    final result = <String>[];
+    for (final m in regex.allMatches(source)) {
+      final raw = m.group(1);
+      if (raw == null || raw.isEmpty) continue;
+      final token = '@$raw';
+      if (seen.add(token)) {
+        result.add(token);
+      }
+    }
+    return result;
+  }
+
+  InlineSpan _buildMentionHighlightedText(String text, BuildContext context) {
+    final p = context.appTheme;
+    final regex = RegExp(r'@([^\s@,;:(){}\[\]<>]+)');
+    final spans = <InlineSpan>[];
+    var cursor = 0;
+
+    for (final match in regex.allMatches(text)) {
+      if (match.start > cursor) {
+        spans.add(
+          TextSpan(
+            text: text.substring(cursor, match.start),
+            style: TextStyle(color: p.textSecondary),
+          ),
+        );
+      }
+      spans.add(
+        TextSpan(
+          text: text.substring(match.start, match.end),
+          style: TextStyle(
+            color: p.primary,
+            fontWeight: FontWeight.w700,
+            backgroundColor: p.primary.withValues(alpha: 0.14),
+          ),
+        ),
+      );
+      cursor = match.end;
+    }
+    if (cursor < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(cursor),
+          style: TextStyle(color: p.textSecondary),
+        ),
+      );
+    }
+
+    if (spans.isEmpty) {
+      spans.add(
+        TextSpan(
+          text: text,
+          style: TextStyle(color: p.textSecondary),
+        ),
+      );
+    }
+    return TextSpan(children: spans);
+  }
+
+  void _toggleDone(bool nextDone) {
+    if (_loading || _lockMessage != null) return;
+    setState(() => _status = nextDone ? 'done' : 'active');
   }
 
   Future<void> _archive() async {
@@ -200,7 +290,8 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       if (token == null) return;
 
       if (_wsService.isConnected) {
-        final reqId = 'archive_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
+        final reqId =
+            'archive_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
         await _wsService.archiveCard(
           boardId: widget.boardId,
           cardId: widget.card.id,
@@ -215,7 +306,9 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
       if (mounted) CustomNavigationUtil.back(context);
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -225,15 +318,19 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
   @override
   Widget build(BuildContext context) {
     final p = context.appTheme;
-    ref.listen<Map<int, CardLockState>>(
-      cardLocksProvider(widget.boardId),
-      (prev, next) {
-        if (!mounted) return;
-        if (next.containsKey(widget.card.id) || (prev?.containsKey(widget.card.id) ?? false)) {
-          _syncLockUi();
-        }
-      },
-    );
+    final myUserId = ref.watch(sessionNotifierProvider).value?.userId;
+    final mentionedToMe =
+        myUserId != null && widget.card.mentionedUserIds.contains(myUserId);
+    ref.listen<Map<int, CardLockState>>(cardLocksProvider(widget.boardId), (
+      prev,
+      next,
+    ) {
+      if (!mounted) return;
+      if (next.containsKey(widget.card.id) ||
+          (prev?.containsKey(widget.card.id) ?? false)) {
+        _syncLockUi();
+      }
+    });
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -244,7 +341,9 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
         return AnimatedPadding(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
           child: GestureDetector(
             onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
             behavior: HitTestBehavior.opaque,
@@ -280,29 +379,91 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                                 ),
                               ),
                               const Spacer(),
-                              IconButton(
-                                tooltip: context.tr('markdownHelp'),
-                                onPressed: () => showMarkdownHelpDialog(context),
-                                icon: const Icon(Icons.help_outline),
+                              FilledButton(
+                                onPressed: (_loading || _lockMessage != null)
+                                    ? null
+                                    : _save,
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                ),
+                                child: _loading
+                                    ? const SizedBox(
+                                        height: 16,
+                                        width: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : Text(context.tr('save')),
+                              ),
+                              const SizedBox(width: 8),
+                              OutlinedButton(
+                                onPressed: (_loading || _lockMessage != null)
+                                    ? null
+                                    : _archive,
+                                style: OutlinedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
+                                  ),
+                                  foregroundColor: p.accent,
+                                ),
+                                child: Text(context.tr('delete')),
                               ),
                             ],
                           ),
                           if (_lockMessage != null) ...[
                             const SizedBox(height: 8),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
                               decoration: BoxDecoration(
                                 color: p.accent.withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: p.accent.withValues(alpha: 0.5)),
+                                border: Border.all(
+                                  color: p.accent.withValues(alpha: 0.5),
+                                ),
                               ),
                               child: Text(
                                 _lockMessage!,
-                                style: TextStyle(color: p.accent, fontSize: ConfigUI.fontSizeLabel),
+                                style: TextStyle(
+                                  color: p.accent,
+                                  fontSize: ConfigUI.fontSizeLabel,
+                                ),
                               ),
                             ),
                           ],
                           const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _status == 'done',
+                                onChanged: (_lockMessage != null || _loading)
+                                    ? null
+                                    : (v) => _toggleDone(v ?? false),
+                              ),
+                              Text(
+                                context.tr('cardStatusDone'),
+                                style: TextStyle(
+                                  color: p.textPrimary,
+                                  fontSize: ConfigUI.fontSizeBody,
+                                ),
+                              ),
+                              const Spacer(),
+                              IconButton(
+                                tooltip: context.tr('markdownHelp'),
+                                onPressed: () =>
+                                    showMarkdownHelpDialog(context),
+                                icon: const Icon(Icons.help_outline),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
                           TextField(
                             controller: _titleController,
                             enabled: _lockMessage == null && !_loading,
@@ -321,7 +482,9 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                             maxLength: ConfigUI.cardDescriptionMaxLength,
                             maxLengthEnforcement: MaxLengthEnforcement.enforced,
                             inputFormatters: [
-                              MaxLinesTextInputFormatter(ConfigUI.cardDescriptionMaxLines),
+                              MaxLinesTextInputFormatter(
+                                ConfigUI.cardDescriptionMaxLines,
+                              ),
                             ],
                             decoration: InputDecoration(
                               labelText: context.tr('cardDescription'),
@@ -331,6 +494,79 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                             maxLines: 5,
                             onChanged: (_) => setState(() {}),
                           ),
+                          const SizedBox(height: 6),
+                          Text(
+                            context.tr('mentionInputHint'),
+                            style: TextStyle(
+                              color: p.textSecondary,
+                              fontSize: ConfigUI.fontSizeLabel,
+                            ),
+                          ),
+                          if (mentionedToMe) ...[
+                            const SizedBox(height: 8),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: p.primary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: p.primary.withValues(alpha: 0.45),
+                                ),
+                              ),
+                              child: Text(
+                                context.tr('mentionedToMe'),
+                                style: TextStyle(
+                                  color: p.primary,
+                                  fontSize: ConfigUI.fontSizeLabel,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ],
+                          if (_detectedMentions().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _detectedMentions()
+                                  .map(
+                                    (token) => Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: p.primary.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        token,
+                                        style: TextStyle(
+                                          color: p.primary,
+                                          fontSize: ConfigUI.fontSizeLabel,
+                                        ),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                          ],
+                          if (mentionedToMe &&
+                              _descController.text.trim().isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            RichText(
+                              text: _buildMentionHighlightedText(
+                                _descController.text.trim(),
+                                context,
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: 8),
                           Text(
                             context.tr('preview'),
@@ -357,19 +593,26 @@ class _CardDetailModalState extends ConsumerState<CardDetailModal> {
                           const SizedBox(height: 24),
                           Row(
                             children: [
+                              const Spacer(),
                               FilledButton(
-                                onPressed: (_loading || _lockMessage != null) ? null : _save,
+                                onPressed: (_loading || _lockMessage != null)
+                                    ? null
+                                    : _save,
                                 child: _loading
                                     ? const SizedBox(
                                         height: 20,
                                         width: 20,
-                                        child: CircularProgressIndicator(strokeWidth: 2),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
                                       )
                                     : Text(context.tr('save')),
                               ),
                               const SizedBox(width: 12),
                               OutlinedButton(
-                                onPressed: (_loading || _lockMessage != null) ? null : _archive,
+                                onPressed: (_loading || _lockMessage != null)
+                                    ? null
+                                    : _archive,
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: p.accent,
                                 ),

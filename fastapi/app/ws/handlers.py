@@ -9,6 +9,10 @@ from datetime import datetime
 from fastapi import WebSocket
 
 from app.database.connection import connect_db
+from app.utils.mention_util import (
+    get_card_mentioned_user_ids,
+    sync_card_mentions,
+)
 from app.ws.room import join_room, leave_room, leave_all_rooms, broadcast_to_board, get_room_members
 from app.ws.lock import acquire_lock, renew_lock, release_lock, release_locks_by_user
 
@@ -225,7 +229,7 @@ async def _handle_card_create(ws: WebSocket, user_id: int, data: dict, req_id: s
                 return
             # 신규 카드는 컬럼 맨 위에 삽입
             cursor.execute(
-                "SELECT MIN(position) FROM cards WHERE column_id = %s AND status = 'active'",
+                "SELECT MIN(position) FROM cards WHERE column_id = %s AND status <> 'archived'",
                 (column_id,),
             )
             min_pos = cursor.fetchone()[0]
@@ -238,6 +242,7 @@ async def _handle_card_create(ws: WebSocket, user_id: int, data: dict, req_id: s
                 (board_id, column_id, title, description, priority, position, user_id, user_id),
             )
             card_id = cursor.lastrowid
+            mentioned_user_ids = sync_card_mentions(cursor, board_id, card_id, title, description or "")
             board_version = _touch_and_get_board_version(cursor, board_id)
             conn.commit()
 
@@ -253,6 +258,7 @@ async def _handle_card_create(ws: WebSocket, user_id: int, data: dict, req_id: s
                     "priority": priority,
                     "status": "active",
                     "position": position,
+                    "mentioned_user_ids": mentioned_user_ids,
                     "updated_at": _ts_ms(),
                 },
                 "board_version": board_version,
@@ -302,7 +308,7 @@ async def _handle_card_move(ws: WebSocket, user_id: int, data: dict, req_id: str
                 await _send_error(ws, "FORBIDDEN", "보드 접근 권한이 없습니다", req_id)
                 return
             cursor.execute(
-                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status = 'active'",
+                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status <> 'archived'",
                 (card_id, board_id),
             )
             if not cursor.fetchone():
@@ -320,7 +326,7 @@ async def _handle_card_move(ws: WebSocket, user_id: int, data: dict, req_id: str
             # (이전 position 기반 방식은 하위 호환으로만 유지)
             if before_card_id is not None:
                 cursor.execute(
-                    "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND column_id = %s AND status = 'active'",
+                    "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND column_id = %s AND status <> 'archived'",
                     (before_card_id, board_id, to_column_id),
                 )
                 if not cursor.fetchone():
@@ -328,7 +334,7 @@ async def _handle_card_move(ws: WebSocket, user_id: int, data: dict, req_id: str
                     return
             if after_card_id is not None:
                 cursor.execute(
-                    "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND column_id = %s AND status = 'active'",
+                    "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND column_id = %s AND status <> 'archived'",
                     (after_card_id, board_id, to_column_id),
                 )
                 if not cursor.fetchone():
@@ -347,7 +353,7 @@ async def _handle_card_move(ws: WebSocket, user_id: int, data: dict, req_id: str
 
             cursor.execute(
                 """SELECT id FROM cards
-                   WHERE column_id = %s AND board_id = %s AND status = 'active' AND id <> %s
+                   WHERE column_id = %s AND board_id = %s AND status <> 'archived' AND id <> %s
                    ORDER BY position, id""",
                 (to_column_id, board_id, card_id),
             )
@@ -437,7 +443,7 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
                 await _send_error(ws, "FORBIDDEN", "보드 접근 권한이 없습니다", req_id)
                 return
             cursor.execute(
-                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status = 'active'",
+                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status <> 'archived'",
                 (card_id, board_id),
             )
             if not cursor.fetchone():
@@ -471,12 +477,24 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
                     (card_id,),
                 )
                 r = cursor.fetchone()
+                mention_ids = get_card_mentioned_user_ids(
+                    cursor,
+                    card_id,
+                    fallback_board_id=board_id,
+                    fallback_texts=(r[2], r[3] or ""),
+                )
                 payload = {
                     "type": "CARD_UPDATED",
                     "data": {
                         "board_id": board_id,
                         "card_id": card_id,
-                        "patch": {"title": r[2], "description": r[3] or "", "priority": r[4], "status": r[5]},
+                        "patch": {
+                            "title": r[2],
+                            "description": r[3] or "",
+                            "priority": r[4],
+                            "status": r[5],
+                            "mentioned_user_ids": mention_ids,
+                        },
                         "updated_at": _ts_ms(),
                         "board_version": _get_board_version(cursor, board_id),
                     },
@@ -493,6 +511,15 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
                 f"UPDATE cards SET {', '.join(updates)} WHERE id = %s",
                 params,
             )
+            mention_ids: list[int] | None = None
+            if "title" in patch or "description" in patch:
+                cursor.execute(
+                    "SELECT title, description FROM cards WHERE id = %s",
+                    (card_id,),
+                )
+                row = cursor.fetchone()
+                if row:
+                    mention_ids = sync_card_mentions(cursor, board_id, card_id, row[0], row[1] or "")
             board_version = _touch_and_get_board_version(cursor, board_id)
             conn.commit()
 
@@ -506,6 +533,8 @@ async def _handle_card_update(ws: WebSocket, user_id: int, data: dict, req_id: s
                 "board_version": board_version,
             },
         }
+        if mention_ids is not None:
+            payload["data"]["patch"]["mentioned_user_ids"] = mention_ids
         if req_id:
             payload["req_id"] = req_id
         await broadcast_to_board(board_id, payload)
@@ -628,7 +657,7 @@ async def _handle_lock_acquire(ws: WebSocket, user_id: int, data: dict, req_id: 
                 await _send_error(ws, "FORBIDDEN", "보드 접근 권한이 없습니다", req_id)
                 return
             cursor.execute(
-                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status = 'active'",
+                "SELECT 1 FROM cards WHERE id = %s AND board_id = %s AND status <> 'archived'",
                 (card_id, board_id),
             )
             if not cursor.fetchone():

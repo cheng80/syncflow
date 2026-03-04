@@ -13,6 +13,10 @@ from pydantic import BaseModel
 
 from app.database.connection import connect_db
 from app.utils.auth_deps import get_current_user_id
+from app.utils.mention_util import (
+    get_mentions_map_by_card_ids,
+    resolve_mentioned_user_ids,
+)
 
 router = APIRouter()
 
@@ -344,7 +348,7 @@ async def delete_column(
             fallback_id = ordered_ids[idx - 1] if idx > 0 else ordered_ids[idx + 1]
 
             cursor.execute(
-                "UPDATE cards SET column_id = %s, updated_by = %s WHERE board_id = %s AND column_id = %s AND status = 'active'",
+                "UPDATE cards SET column_id = %s, updated_by = %s WHERE board_id = %s AND column_id = %s AND status <> 'archived'",
                 (fallback_id, user_id, board_id, column_id),
             )
             moved_count = cursor.rowcount
@@ -499,25 +503,30 @@ async def get_board_detail(
                 """
                 SELECT id, column_id, title, description, priority, assignee_id, due_date, status, position
                 FROM cards
-                WHERE board_id = %s AND status = 'active'
+                WHERE board_id = %s AND status <> 'archived'
                 ORDER BY column_id, position
                 """,
                 (board_id,),
             )
-            cards = [
-                {
-                    "id": r[0],
-                    "column_id": r[1],
-                    "title": r[2],
-                    "description": r[3] or "",
-                    "priority": r[4],
-                    "assignee_id": r[5],
-                    "due_date": r[6].isoformat() + "Z" if r[6] else None,
-                    "status": r[7],
-                    "position": r[8],
-                }
-                for r in cursor.fetchall()
-            ]
+            card_rows = cursor.fetchall()
+            mention_map = get_mentions_map_by_card_ids(cursor, [int(r[0]) for r in card_rows])
+            cards = []
+            for r in card_rows:
+                cards.append(
+                    {
+                        "id": r[0],
+                        "column_id": r[1],
+                        "title": r[2],
+                        "description": r[3] or "",
+                        "priority": r[4],
+                        "assignee_id": r[5],
+                        "due_date": r[6].isoformat() + "Z" if r[6] else None,
+                        "status": r[7],
+                        "position": r[8],
+                        "mentioned_user_ids": mention_map.get(int(r[0]), [])
+                        or resolve_mentioned_user_ids(cursor, board_id, r[2], r[3] or ""),
+                    }
+                )
 
         return {
             "id": bid,

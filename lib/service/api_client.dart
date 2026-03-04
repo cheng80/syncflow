@@ -51,9 +51,9 @@ class ApiClient {
   }
 
   Map<String, String> _authHeaders(String token) => {
-        'Content-Type': 'application/json',
-        'X-Session-Token': token,
-      };
+    'Content-Type': 'application/json',
+    'X-Session-Token': token,
+  };
 
   /// GET /v1/auth/me - 현재 사용자 ID 조회
   Future<int> getMe(String sessionToken) async {
@@ -87,7 +87,11 @@ class ApiClient {
   }
 
   /// POST /v1/boards - 보드 생성
-  Future<BoardItem> createBoard(String sessionToken, String title, {String template = 'todo'}) async {
+  Future<BoardItem> createBoard(
+    String sessionToken,
+    String title, {
+    String template = 'todo',
+  }) async {
     final res = await http.post(
       Uri.parse(_url('/v1/boards')),
       headers: _authHeaders(sessionToken),
@@ -118,7 +122,10 @@ class ApiClient {
   }
 
   /// POST /v1/boards/join - 초대 코드로 보드 참가
-  Future<JoinBoardResponse> joinBoardByCode(String sessionToken, String code) async {
+  Future<JoinBoardResponse> joinBoardByCode(
+    String sessionToken,
+    String code,
+  ) async {
     final res = await http.post(
       Uri.parse(_url('/v1/boards/join')),
       headers: _authHeaders(sessionToken),
@@ -134,7 +141,11 @@ class ApiClient {
   }
 
   /// PATCH /v1/boards/{id} - 보드 수정 (owner만)
-  Future<BoardItem> updateBoard(String sessionToken, int boardId, {required String title}) async {
+  Future<BoardItem> updateBoard(
+    String sessionToken,
+    int boardId, {
+    required String title,
+  }) async {
     final res = await http.patch(
       Uri.parse(_url('/v1/boards/$boardId')),
       headers: _authHeaders(sessionToken),
@@ -186,10 +197,7 @@ class ApiClient {
     final res = await http.post(
       Uri.parse(_url('/v1/boards/$boardId/columns')),
       headers: _authHeaders(sessionToken),
-      body: CustomJsonUtil.encode({
-        'title': title,
-        'is_done': isDone,
-      }) ?? '',
+      body: CustomJsonUtil.encode({'title': title, 'is_done': isDone}) ?? '',
     );
     if (res.statusCode != 200) {
       final body = CustomJsonUtil.toMap(res.body);
@@ -230,7 +238,11 @@ class ApiClient {
   }
 
   /// DELETE /v1/boards/{boardId}/columns/{columnId} - 컬럼 삭제 (owner)
-  Future<void> deleteColumn(String sessionToken, int boardId, int columnId) async {
+  Future<void> deleteColumn(
+    String sessionToken,
+    int boardId,
+    int columnId,
+  ) async {
     final res = await http.delete(
       Uri.parse(_url('/v1/boards/$boardId/columns/$columnId')),
       headers: _authHeaders(sessionToken),
@@ -252,12 +264,14 @@ class ApiClient {
     final res = await http.post(
       Uri.parse(_url('/v1/cards')),
       headers: _authHeaders(sessionToken),
-      body: CustomJsonUtil.encode({
-        'title': title,
-        'description': description ?? '',
-        'column_id': columnId,
-        'priority': priority,
-      }) ?? '',
+      body:
+          CustomJsonUtil.encode({
+            'title': title,
+            'description': description ?? '',
+            'column_id': columnId,
+            'priority': priority,
+          }) ??
+          '',
     );
     if (res.statusCode != 200) {
       final body = CustomJsonUtil.toMap(res.body);
@@ -276,6 +290,7 @@ class ApiClient {
     String? description,
     int? columnId,
     String? priority,
+    String? status,
     int? position,
   }) async {
     final body = <String, dynamic>{};
@@ -283,6 +298,7 @@ class ApiClient {
     if (description != null) body['description'] = description;
     if (columnId != null) body['column_id'] = columnId;
     if (priority != null) body['priority'] = priority;
+    if (status != null) body['status'] = status;
     if (position != null) body['position'] = position;
     if (body.isEmpty) throw ApiException('수정할 항목이 없습니다.');
 
@@ -360,10 +376,10 @@ class VerifyResponse {
     required this.userId,
   });
   factory VerifyResponse.fromJson(Map<String, dynamic> j) => VerifyResponse(
-        sessionToken: j['session_token'] as String,
-        expiresAt: j['expires_at'] as String,
-        userId: j['user_id'] as int,
-      );
+    sessionToken: j['session_token'] as String,
+    expiresAt: j['expires_at'] as String,
+    userId: j['user_id'] as int,
+  );
   final String sessionToken;
   final String expiresAt;
   final int userId;
@@ -371,15 +387,18 @@ class VerifyResponse {
 
 class InviteResponse {
   InviteResponse({required this.code, required this.expiresAt});
-  factory InviteResponse.fromJson(Map<String, dynamic> j) =>
-      InviteResponse(code: j['code'] as String, expiresAt: j['expires_at'] as String);
+  factory InviteResponse.fromJson(Map<String, dynamic> j) => InviteResponse(
+    code: j['code'] as String,
+    expiresAt: j['expires_at'] as String,
+  );
   final String code;
   final String expiresAt;
 }
 
 class JoinBoardResponse {
   JoinBoardResponse({required this.boardId, required this.title, this.message});
-  factory JoinBoardResponse.fromJson(Map<String, dynamic> j) => JoinBoardResponse(
+  factory JoinBoardResponse.fromJson(Map<String, dynamic> j) =>
+      JoinBoardResponse(
         boardId: j['board_id'] as int,
         title: j['title'] as String,
         message: j['message'] as String?,

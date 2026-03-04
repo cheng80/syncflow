@@ -116,7 +116,25 @@ CREATE TABLE IF NOT EXISTS cards (
   FOREIGN KEY (owner_lock_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 9. board_invites - 초대 코드 (2차 확장용)
+-- 9. card_mentions - 카드 멘션 대상 저장(저장형)
+CREATE TABLE IF NOT EXISTS card_mentions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  board_id BIGINT NOT NULL,
+  card_id BIGINT NOT NULL,
+  mentioned_user_id BIGINT NOT NULL,
+  source_token VARCHAR(255) DEFAULT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_card_mentioned_user (card_id, mentioned_user_id),
+  INDEX idx_board_id (board_id),
+  INDEX idx_card_id (card_id),
+  INDEX idx_mentioned_user_id (mentioned_user_id),
+  FOREIGN KEY (board_id) REFERENCES boards(id) ON DELETE CASCADE,
+  FOREIGN KEY (card_id) REFERENCES cards(id) ON DELETE CASCADE,
+  FOREIGN KEY (mentioned_user_id) REFERENCES users(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. board_invites - 초대 코드 (2차 확장용)
 CREATE TABLE IF NOT EXISTS board_invites (
   id BIGINT AUTO_INCREMENT PRIMARY KEY,
   board_id BIGINT NOT NULL,

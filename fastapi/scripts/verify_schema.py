@@ -23,6 +23,7 @@ EXPECTED = {
     'cards': ['id', 'board_id', 'column_id', 'title', 'description', 'priority', 'assignee_id', 'due_date',
               'status', 'position', 'owner_lock', 'owner_lock_by', 'owner_lock_at',
               'updated_at', 'updated_by', 'created_at', 'created_by'],
+    'card_mentions': ['id', 'board_id', 'card_id', 'mentioned_user_id', 'source_token', 'created_at', 'updated_at'],
     'board_invites': ['id', 'board_id', 'code', 'created_by', 'expires_at', 'max_uses', 'used_count', 'revoked', 'created_at'],
 }
 

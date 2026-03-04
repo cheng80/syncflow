@@ -2,6 +2,7 @@
 
 > **기준 규칙**: [CURSOR.md](../CURSOR.md)  
 > **참조 문서**: [docs/syncflow/](syncflow/), [docs/email/](email/)  
+> **화면/파일 구조 상세**: [VIEW_ROUTE_AND_FILE_HIERARCHY.md](VIEW_ROUTE_AND_FILE_HIERARCHY.md)  
 > **유지**: 구현 시마다 해당 항목 `[ ]` → `[x]`로 갱신
 
 ---
@@ -98,6 +99,11 @@
 - [x] 6.1 멤버 초대 (board_invites, 초대 코드)
 - [x] 6.2 컬럼 추가/수정/삭제/재정렬
 - [x] 6.3 Markdown 확장 (체크리스트, @멘션)
+- [x] 6.4 카드 완료 체크(status active/done) UI + WS 동기화
+- [x] 6.5 멘션 저장형 전환(card_mentions) + 레거시 fallback 호환
+- [x] 6.6 멘션 수신 인앱 UI(@Me 배지, 멘션 필터, 상세 하이라이트)
+- [x] 6.7 보드 상세 필터 확장 (맨션만 보기, 전체/완료/미완료), 완료 카드 이동 제한 해제
+- [x] 6.8 보드 제목 실시간 반영 (BOARD_UPDATED WebSocket 브로드캐스트)
 
 ---
 
@@ -183,16 +189,46 @@ fastapi/app/
 |------|------|
 | **FastAPI** | 단일 인스턴스 전제, Soft lock은 메모리 저장 |
 | **재연결** | WebSocket 끊김 시 REST로 스냅샷 재조회 후 WS 이벤트만 수신 |
-| **초대** | 1차 MVP에서는 미적용, board_invites는 ERD에만 반영 |
+| **스키마 호환성** | 신규 테이블 도입 시 즉시 hard cutover 금지, fallback 경로를 먼저 유지 |
+| **초대** | board_invites 적용 완료, 만료/사용량 정책은 운영 파라미터로 관리 |
 
 ---
 
-## 9. 다음 액션
+## 9. 구조/분리/마이그레이션 운영 규칙
 
-1. **Phase 1** 진행: 1.2 auth API → 1.3~1.5 Flutter 로그인
-2. 각 Phase 시작 전 접근 방식 설명 → 승인 → 코딩 (CURSOR.md 1항)
-3. 구현 완료 시 본 문서 해당 항목 체크 `[x]` 갱신
+### 9-1) 구조 분리 원칙
+
+- 화면 엔트리(`*screen.dart`)는 조립/분기만 담당한다.
+- WS 이벤트 반영은 전용 브리지 파일에서 처리한다.
+- API endpoint 조합/호출은 `service` + `vm handler` 계층을 통해서만 사용한다.
+- 기능 파일이 400줄 이상이거나 책임이 2개 이상이면 분리를 우선 검토한다.
+
+### 9-2) 마이그레이션 절차
+
+1. fallback 먼저 추가  
+   예: 저장형(`card_mentions`) 도입 전/후 모두 기존 파싱 경로 유지
+2. 신규 경로 기본값 전환  
+   응답/UI는 저장형 우선 사용
+3. 회귀 검증  
+   멀티클라 동기화 + 레거시 데이터 표시 + analyze/compileall
+4. 레거시 제거  
+   제거 조건을 `todo.md`에 명시 후 제거
+
+### 9-3) 문서 동기화 규칙
+
+- 구조 변경 PR에는 최소 아래 문서를 함께 갱신한다.
+  - 본 문서(`PLAN_BASIC_STRUCTURE.md`)
+  - `VIEW_ROUTE_AND_FILE_HIERARCHY.md`
+  - `todo.md` (진행 상태/검증 항목)
 
 ---
 
-*작성일: 2026-03-02 | 최종 갱신: Phase 6.3 완료*
+## 10. 다음 액션
+
+1. 담당자(assignee) 도입 및 API/UI 연결
+2. 멘션/담당자 기반 알림 설정 모델 초안 확정
+3. FCM 토큰 등록/해제 API 및 앱 초기 연동
+
+---
+
+*작성일: 2026-03-02 | 최종 갱신: Phase 6.8 완료 기준 반영*

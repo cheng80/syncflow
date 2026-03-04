@@ -12,10 +12,11 @@ import 'package:syncflow/util/config_ui.dart';
 /// Windows + Android 에뮬레이터 사용자는 자신의 호스트 IP를 설정하세요
 /// 예: 'http://192.168.1.50:8000'
 /// null이면 플랫폼에 따라 자동 선택 (Android: 10.0.2.2, iOS: 127.0.0.1)
-// const String? customApiBaseUrl = null;  // 로컬: 127.0.0.1:8000
-// 윈도우 사용자는 윗줄 주석 처리 하고 아래 줄 주석 해제하여 자신의 호스트 IP를 설정하세요.
+// 로컬 개발: null → 127.0.0.1:8000
+// TODO 완료 후 점검 → 서버 업데이트 시 원격 URL로 변경
+const String? customApiBaseUrl = null;
+// const String? customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
 // const String? customApiBaseUrl = 'http://192.168.90.7:8000';
-const String? customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
 
 /// 플랫폼별 기본 API Base URL 반환
 /// - Android 에뮬레이터: 10.0.2.2 (호스트 머신 루프백)
