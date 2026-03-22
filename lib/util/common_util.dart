@@ -15,8 +15,8 @@ import 'package:syncflow/util/config_ui.dart';
 /// 빈 문자열이면 플랫폼 기본값 사용 (Android: 10.0.2.2, iOS: 127.0.0.1)
 // 로컬 개발: '' → 127.0.0.1:8000
 // TODO 완료 후 점검 → 서버 업데이트 시 원격 URL로 변경
-// const String? customApiBaseUrl = null;
-const String customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
+const String? customApiBaseUrl = null;
+// const String customApiBaseUrl = 'http://cheng80.myqnapcloud.com:18003';
 // const String? customApiBaseUrl = 'http://192.168.90.7:8000';
 
 /// 플랫폼별 기본 API Base URL 반환

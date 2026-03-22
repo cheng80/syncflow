@@ -17,6 +17,7 @@ import 'package:syncflow/service/api_client.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
 import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/util/config_ui.dart';
+import 'package:syncflow/vm/app_flow_providers.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/widget/keyboard_dismiss_scroll_view.dart';
 import 'package:syncflow/widget/language_picker_sheet.dart';
@@ -25,7 +26,10 @@ import 'package:syncflow/widget/language_picker_sheet.dart';
 /// Step 1: 이메일 입력 → 코드 발송
 /// Step 2: 코드 입력 → 로그인
 class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+  const LoginScreen({super.key, this.showBackToWelcome = false});
+
+  /// 환영 화면에서 진입 시 뒤로가기로 환영으로 복귀.
+  final bool showBackToWelcome;
 
   @override
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
@@ -111,7 +115,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             res.expiresAt,
             res.userId,
           );
-      // 세션 저장 후 main.dart의 sessionNotifierProvider watch로 MainScaffold로 전환됨
+      ref.read(guestBrowsingProvider.notifier).state = false;
+      ref.read(showLoginFromWelcomeProvider.notifier).state = false;
+      // 세션 저장 후 루트가 MainScaffold로 전환됨
     } on ApiException catch (e) {
       setState(() {
         _loading = false;
@@ -145,6 +151,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       appBar: AppBar(
         backgroundColor: p.background,
         scrolledUnderElevation: 0,
+        automaticallyImplyLeading: false,
+        leading: widget.showBackToWelcome
+            ? IconButton(
+                icon: Icon(Icons.arrow_back, color: p.icon),
+                onPressed: () {
+                  ref.read(showLoginFromWelcomeProvider.notifier).state = false;
+                },
+              )
+            : null,
         iconTheme: IconThemeData(color: p.icon),
         actions: [
           IconButton(

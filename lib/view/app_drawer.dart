@@ -26,6 +26,7 @@ import 'package:syncflow/util/common_util.dart';
 import 'package:syncflow/util/config_ui.dart';
 import 'package:syncflow/util/sheet_util.dart';
 import 'package:syncflow/util/app_storage.dart';
+import 'package:syncflow/vm/app_flow_providers.dart';
 import 'package:syncflow/vm/board_list_notifier.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:syncflow/vm/theme_notifier.dart';
@@ -186,6 +187,9 @@ class AppDrawer extends ConsumerWidget {
                 if (ok != true) return;
                 try {
                   await ref.read(sessionNotifierProvider.notifier).deleteAccount();
+                  ref.invalidate(hasEverLoggedInProvider);
+                  ref.read(guestBrowsingProvider.notifier).state = false;
+                  ref.read(showLoginFromWelcomeProvider.notifier).state = false;
                 } on ApiException catch (e) {
                   final ctx = rootNavigatorKey.currentContext ?? context;
                   if (ctx.mounted) {

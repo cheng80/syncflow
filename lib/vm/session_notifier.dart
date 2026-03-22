@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import 'package:syncflow/service/api_client.dart';
+import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/util/session_secure_storage.dart';
 
 /// 세션 상태
@@ -119,16 +120,22 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
     final token = current?.sessionToken;
     if (token == null) {
       await SessionSecureStorage.clearSession();
+      await SessionSecureStorage.setHasEverLoggedIn(false);
+      await AppStorage.setGuestBrowsingActive(false);
       state = const AsyncData(SessionState());
       return;
     }
     await ApiClient().deleteMe(token);
     await SessionSecureStorage.clearSession();
+    await SessionSecureStorage.setHasEverLoggedIn(false);
+    await AppStorage.setGuestBrowsingActive(false);
     state = const AsyncData(SessionState());
   }
 
   /// 로그인 성공 시 세션 저장 (Secure Storage + state)
   Future<void> loginSuccess(String token, String expiresAt, int userId) async {
+    await SessionSecureStorage.setHasEverLoggedIn(true);
+    await AppStorage.setGuestBrowsingActive(false);
     await SessionSecureStorage.saveSession(token, expiresAt, userId: userId);
     setSession(token, expiresAt, userId);
 

@@ -15,6 +15,7 @@ class SessionSecureStorage {
   static const String _keySessionToken = 'syncflow_session_token';
   static const String _keySessionExpiresAt = 'syncflow_session_expires_at';
   static const String _keyUserId = 'syncflow_user_id';
+  static const String _keyHasEverLoggedIn = 'syncflow_has_ever_logged_in';
 
   /// 세션 토큰 조회
   static Future<String?> getSessionToken() =>
@@ -44,5 +45,19 @@ class SessionSecureStorage {
     await _storage.delete(key: _keySessionToken);
     await _storage.delete(key: _keySessionExpiresAt);
     await _storage.delete(key: _keyUserId);
+  }
+
+  /// 한 번이라도 로그인에 성공한 적 있음 (온보딩 이원 화면 스킵용). 로그아웃 시에도 유지.
+  static Future<bool> getHasEverLoggedIn() async {
+    final v = await _storage.read(key: _keyHasEverLoggedIn);
+    return v == '1' || v == 'true';
+  }
+
+  static Future<void> setHasEverLoggedIn(bool value) async {
+    if (value) {
+      await _storage.write(key: _keyHasEverLoggedIn, value: '1');
+    } else {
+      await _storage.delete(key: _keyHasEverLoggedIn);
+    }
   }
 }

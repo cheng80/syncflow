@@ -11,8 +11,11 @@ import 'package:get_storage/get_storage.dart';
 import 'package:syncflow/util/app_locale.dart';
 import 'package:syncflow/util/app_storage.dart';
 import 'package:syncflow/util/session_secure_storage.dart';
+import 'package:syncflow/view/auth/guest_home_screen.dart';
 import 'package:syncflow/view/auth/login_screen.dart';
+import 'package:syncflow/view/auth/welcome_screen.dart';
 import 'package:syncflow/view/main_scaffold.dart';
+import 'package:syncflow/vm/app_flow_providers.dart';
 import 'package:syncflow/vm/session_notifier.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:syncflow/theme/app_theme_colors.dart';
@@ -121,13 +124,28 @@ class _AppBootstrapState extends ConsumerState<AppBootstrap> {
   @override
   void initState() {
     super.initState();
+    // 세션이 이미 복구된 경우(로그인 상태)에만 FCM 초기화 — 게스트/환영/로그인만인 경우 생략 (M1)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(ref.read(fcmNotifierProvider.notifier).initialize());
+      ref.read(sessionNotifierProvider).maybeWhen(
+        data: (session) {
+          if (session.isLoggedIn) {
+            unawaited(ref.read(fcmNotifierProvider.notifier).initialize());
+          }
+        },
+        orElse: () {},
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    ref.listen(sessionNotifierProvider, (previous, next) {
+      next.whenData((session) {
+        if (session.isLoggedIn) {
+          unawaited(ref.read(fcmNotifierProvider.notifier).initialize());
+        }
+      });
+    });
     return const MyApp();
   }
 }
@@ -139,7 +157,6 @@ class MyApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     appLocaleForInit = context.locale;
     final themeMode = ref.watch(themeNotifierProvider);
-    final sessionAsync = ref.watch(sessionNotifierProvider);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -219,12 +236,47 @@ class MyApp extends ConsumerWidget {
           ),
         ),
       ),
-      home: sessionAsync.when(
-        loading: () => const _SessionLoadingScreen(),
-        error: (e, st) => const LoginScreen(),
-        data: (session) =>
-            session.isLoggedIn ? const MainScaffold() : const LoginScreen(),
-      ),
+      home: const _AppRootRouter(),
+    );
+  }
+}
+
+/// 세션 + hasEverLoggedIn + 게스트 플래그로 첫 화면 분기 (M1).
+class _AppRootRouter extends ConsumerWidget {
+  const _AppRootRouter();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final sessionAsync = ref.watch(sessionNotifierProvider);
+    final hasEverAsync = ref.watch(hasEverLoggedInProvider);
+
+    return sessionAsync.when(
+      loading: () => const _SessionLoadingScreen(),
+      error: (e, st) => const LoginScreen(),
+      data: (session) {
+        if (session.isLoggedIn) {
+          return const MainScaffold();
+        }
+
+        return hasEverAsync.when(
+          loading: () => const _SessionLoadingScreen(),
+          error: (e, st) => const LoginScreen(),
+          data: (hasEver) {
+            if (hasEver) {
+              return const LoginScreen();
+            }
+            final guest = ref.watch(guestBrowsingProvider);
+            final showLogin = ref.watch(showLoginFromWelcomeProvider);
+            if (guest) {
+              return const GuestHomeScreen();
+            }
+            if (showLogin) {
+              return const LoginScreen(showBackToWelcome: true);
+            }
+            return const WelcomeScreen();
+          },
+        );
+      },
     );
   }
 }

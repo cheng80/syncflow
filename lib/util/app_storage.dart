@@ -77,6 +77,16 @@ class AppStorage {
   static Future<void> resetTutorialCompleted() =>
       _storage.write(_keyTutorialCompleted, false);
 
+  // ─── 게스트 모드 (로컬 둘러보기, GetStorage만 — 앱 삭제 시 초기화) ─────────────────
+  static const String _keyGuestBrowsingActive = 'guest_browsing_active';
+
+  /// 게스트로 앱을 쓰는 중(로그인 전). M2에서 로컬 보드와 연결.
+  static bool getGuestBrowsingActive() =>
+      _storage.read<bool>(_keyGuestBrowsingActive) ?? false;
+
+  static Future<void> setGuestBrowsingActive(bool value) =>
+      _storage.write(_keyGuestBrowsingActive, value);
+
   // ─── 튜토리얼 보드 (최초 설치 시 자동 생성) ─────────────────
   static const String _keyTutorialBoardCreated = 'tutorial_board_created';
 
