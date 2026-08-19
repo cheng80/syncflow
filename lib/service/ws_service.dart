@@ -51,7 +51,9 @@ class WsService {
         .replaceFirst(RegExp(r'^https?://'), '')
         .replaceFirst(RegExp(r'/$'), '');
     final token = _sessionToken!.trim();
-    final uri = Uri.parse('$wsScheme://$wsHost/ws?token=${Uri.encodeComponent(token)}');
+    final uri = Uri.parse(
+      '$wsScheme://$wsHost/ws?token=${Uri.encodeComponent(token)}',
+    );
 
     try {
       _channel = WebSocketChannel.connect(uri);
@@ -107,8 +109,10 @@ class WsService {
   void _scheduleReconnect() {
     if (_closed || _sessionToken == null) return;
 
-    final delay = (_initialReconnectDelayMs * (1 << _reconnectAttempts))
-        .clamp(_initialReconnectDelayMs, _maxReconnectDelayMs);
+    final delay = (_initialReconnectDelayMs * (1 << _reconnectAttempts)).clamp(
+      _initialReconnectDelayMs,
+      _maxReconnectDelayMs,
+    );
     _reconnectAttempts++;
 
     Future.delayed(Duration(milliseconds: delay), () {
@@ -131,7 +135,7 @@ class WsService {
   Future<void> joinBoard(int boardId, {String? reqId}) async {
     await send({
       'type': 'JOIN_BOARD',
-      if (reqId != null) 'req_id': reqId,
+      'req_id': ?reqId,
       'data': {'board_id': boardId},
     });
   }
@@ -140,7 +144,7 @@ class WsService {
   Future<void> leaveBoard(int boardId, {String? reqId}) async {
     await send({
       'type': 'LEAVE_BOARD',
-      if (reqId != null) 'req_id': reqId,
+      'req_id': ?reqId,
       'data': {'board_id': boardId},
     });
   }
@@ -157,14 +161,14 @@ class WsService {
   }) async {
     await send({
       'type': 'CARD_MOVE',
-      if (reqId != null) 'req_id': reqId,
+      'req_id': ?reqId,
       'data': {
         'board_id': boardId,
         'card_id': cardId,
         'to_column_id': toColumnId,
-        if (beforeCardId != null) 'before_card_id': beforeCardId,
-        if (afterCardId != null) 'after_card_id': afterCardId,
-        if (position != null) 'position': position,
+        'before_card_id': ?beforeCardId,
+        'after_card_id': ?afterCardId,
+        'position': ?position,
       },
     });
   }
@@ -180,7 +184,7 @@ class WsService {
   }) async {
     await send({
       'type': 'CARD_CREATE',
-      if (reqId != null) 'req_id': reqId,
+      'req_id': ?reqId,
       'data': {
         'board_id': boardId,
         'column_id': columnId,
@@ -200,12 +204,8 @@ class WsService {
   }) async {
     await send({
       'type': 'CARD_UPDATE',
-      if (reqId != null) 'req_id': reqId,
-      'data': {
-        'board_id': boardId,
-        'card_id': cardId,
-        'patch': patch,
-      },
+      'req_id': ?reqId,
+      'data': {'board_id': boardId, 'card_id': cardId, 'patch': patch},
     });
   }
 
@@ -217,11 +217,8 @@ class WsService {
   }) async {
     await send({
       'type': 'CARD_ARCHIVE',
-      if (reqId != null) 'req_id': reqId,
-      'data': {
-        'board_id': boardId,
-        'card_id': cardId,
-      },
+      'req_id': ?reqId,
+      'data': {'board_id': boardId, 'card_id': cardId},
     });
   }
 
@@ -233,11 +230,8 @@ class WsService {
   }) async {
     await send({
       'type': 'LOCK_ACQUIRE',
-      if (reqId != null) 'req_id': reqId,
-      'data': {
-        'board_id': boardId,
-        'card_id': cardId,
-      },
+      'req_id': ?reqId,
+      'data': {'board_id': boardId, 'card_id': cardId},
     });
   }
 
@@ -249,11 +243,8 @@ class WsService {
   }) async {
     await send({
       'type': 'LOCK_RENEW',
-      if (reqId != null) 'req_id': reqId,
-      'data': {
-        'board_id': boardId,
-        'card_id': cardId,
-      },
+      'req_id': ?reqId,
+      'data': {'board_id': boardId, 'card_id': cardId},
     });
   }
 
@@ -265,11 +256,8 @@ class WsService {
   }) async {
     await send({
       'type': 'LOCK_RELEASE',
-      if (reqId != null) 'req_id': reqId,
-      'data': {
-        'board_id': boardId,
-        'card_id': cardId,
-      },
+      'req_id': ?reqId,
+      'data': {'board_id': boardId, 'card_id': cardId},
     });
   }
 

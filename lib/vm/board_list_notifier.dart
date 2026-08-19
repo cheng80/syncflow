@@ -42,7 +42,9 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
     if (token == null) return null;
 
     try {
-      final res = await ref.read(boardHandlerProvider).joinBoardByCode(token, code.trim().toUpperCase());
+      final res = await ref
+          .read(boardHandlerProvider)
+          .joinBoardByCode(token, code.trim().toUpperCase());
       await refresh();
       return res;
     } catch (_) {
@@ -57,7 +59,9 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
     if (token == null) return null;
 
     try {
-      final board = await ref.read(boardHandlerProvider).updateBoard(token, boardId, title: title);
+      final board = await ref
+          .read(boardHandlerProvider)
+          .updateBoard(token, boardId, title: title);
       await refresh();
       return board;
     } catch (_) {
@@ -77,13 +81,18 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
 
   /// 보드 생성 후 목록 갱신
   /// template: "todo" (할 일/진행 중/완료), "simple" (단일 컬럼)
-  Future<BoardItem?> createBoard(String title, {String template = 'todo'}) async {
+  Future<BoardItem?> createBoard(
+    String title, {
+    String template = 'todo',
+  }) async {
     final session = ref.read(sessionNotifierProvider).value;
     final token = session?.sessionToken;
     if (token == null) return null;
 
     try {
-      final board = await ref.read(boardHandlerProvider).createBoard(token, title, template: template);
+      final board = await ref
+          .read(boardHandlerProvider)
+          .createBoard(token, title, template: template);
       await refresh();
       return board;
     } catch (_) {
@@ -106,14 +115,15 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
     final cardHandler = ref.read(cardHandlerProvider);
 
     final boards = await boardHandler.listBoards(token);
-    BoardItem? board = boards.where((b) => b.title == tutorialBoardTitle).firstOrNull;
-    if (board == null) {
-      board = await createBoard(tutorialBoardTitle, template: 'todo');
-    }
+    BoardItem? board = boards
+        .where((b) => b.title == tutorialBoardTitle)
+        .firstOrNull;
+    board ??= await createBoard(tutorialBoardTitle, template: 'todo');
     if (board == null) return null;
 
     final detail = await boardHandler.getBoardDetail(token, board.id);
-    final columns = detail.columns..sort((a, b) => a.position.compareTo(b.position));
+    final columns = detail.columns
+      ..sort((a, b) => a.position.compareTo(b.position));
 
     // 이미 카드가 있으면 스킵 (재시도 시 중복 방지)
     if (detail.cards.isNotEmpty) return board;
@@ -147,4 +157,6 @@ class BoardListNotifier extends AsyncNotifier<List<BoardItem>> {
 }
 
 final boardListNotifierProvider =
-    AsyncNotifierProvider<BoardListNotifier, List<BoardItem>>(BoardListNotifier.new);
+    AsyncNotifierProvider<BoardListNotifier, List<BoardItem>>(
+      BoardListNotifier.new,
+    );

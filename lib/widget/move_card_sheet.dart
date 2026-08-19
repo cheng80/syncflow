@@ -55,7 +55,8 @@ class _MoveCardSheetContent extends ConsumerStatefulWidget {
   final VoidCallback onRefresh;
 
   @override
-  ConsumerState<_MoveCardSheetContent> createState() => _MoveCardSheetContentState();
+  ConsumerState<_MoveCardSheetContent> createState() =>
+      _MoveCardSheetContentState();
 }
 
 class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
@@ -82,15 +83,20 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
       final ws = ref.read(wsServiceProvider);
       if (ws.isConnected) {
         final targetColumnId = _selectedColumnId!;
-        final detail = ref.read(boardDetailCacheProvider(widget.boardId)) ??
+        final detail =
+            ref.read(boardDetailCacheProvider(widget.boardId)) ??
             ref.read(boardDetailProvider(widget.boardId)).value;
-        final targetCards = (detail?.cards ?? const <CardItem>[])
-            .where((c) => c.columnId == targetColumnId)
-            .toList()
-          ..sort((a, b) => a.position.compareTo(b.position));
+        final targetCards =
+            (detail?.cards ?? const <CardItem>[])
+                .where((c) => c.columnId == targetColumnId)
+                .toList()
+              ..sort((a, b) => a.position.compareTo(b.position));
         final topCardId = targetCards.isNotEmpty ? targetCards.first.id : null;
-        final optimisticPosition = targetCards.isNotEmpty ? targetCards.first.position - 1 : 0;
-        final reqId = 'move_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
+        final optimisticPosition = targetCards.isNotEmpty
+            ? targetCards.first.position - 1
+            : 0;
+        final reqId =
+            'move_${widget.boardId}_${widget.card.id}_${DateTime.now().microsecondsSinceEpoch}';
         await ws.moveCard(
           boardId: widget.boardId,
           cardId: widget.card.id,
@@ -108,12 +114,14 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
       } else {
         final token = ref.read(sessionNotifierProvider).value?.sessionToken;
         if (token == null) return;
-        await ref.read(cardHandlerProvider).updateCard(
-          token,
-          widget.card.id,
-          columnId: _selectedColumnId!,
-          position: 0,
-        );
+        await ref
+            .read(cardHandlerProvider)
+            .updateCard(
+              token,
+              widget.card.id,
+              columnId: _selectedColumnId!,
+              position: 0,
+            );
         widget.onRefresh();
       }
       if (mounted) {
@@ -121,7 +129,9 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
       }
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -142,7 +152,10 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: p.primary.withValues(alpha: 0.2),
                   borderRadius: ConfigUI.chipRadius,
@@ -180,27 +193,44 @@ class _MoveCardSheetContentState extends ConsumerState<_MoveCardSheetContent> {
             ),
           ),
           const SizedBox(height: 12),
-          ...targets.map((col) => RadioListTile<int>(
-                value: col.id,
-                groupValue: _selectedColumnId,
-                onChanged: _loading ? null : (v) => setState(() => _selectedColumnId = v),
-                title: Text(
-                  col.title,
-                  style: TextStyle(color: p.textPrimary),
-                ),
-                dense: true,
-              )),
+          RadioGroup<int>(
+            groupValue: _selectedColumnId,
+            onChanged: (value) {
+              if (!_loading) {
+                setState(() => _selectedColumnId = value);
+              }
+            },
+            child: Column(
+              children: targets
+                  .map(
+                    (col) => RadioListTile<int>(
+                      value: col.id,
+                      enabled: !_loading,
+                      title: Text(
+                        col.title,
+                        style: TextStyle(color: p.textPrimary),
+                      ),
+                      dense: true,
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
           const SizedBox(height: 24),
           Row(
             children: [
               OutlinedButton(
-                onPressed: _loading ? null : () => CustomNavigationUtil.back(context),
+                onPressed: _loading
+                    ? null
+                    : () => CustomNavigationUtil.back(context),
                 child: Text(context.tr('cancel')),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton(
-                  onPressed: (_loading || _selectedColumnId == null) ? null : _executeMove,
+                  onPressed: (_loading || _selectedColumnId == null)
+                      ? null
+                      : _executeMove,
                   child: _loading
                       ? const SizedBox(
                           height: 20,

@@ -64,6 +64,7 @@ dependencies:
 
   showcaseview: ^5.0.1 # 기능 소개 화면 설정
   in_app_review: ^2.0.11 # 앱 리뷰 기능
+  flutter_native_splash: ^2.4.6
   flutter_markdown_plus: ^1.0.3
   markdown: ^7.3.0
 
@@ -89,9 +90,6 @@ dev_dependencies:
 
   # 앱 아이콘 생성
   flutter_launcher_icons: ^0.14.4
-
-  # 앱 시작 화면 생성 도구
-  flutter_native_splash: ^2.4.6
 
 # 앱 아이콘 (docs/icon_splash/icon.png)
 flutter_launcher_icons:

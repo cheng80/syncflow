@@ -10,16 +10,14 @@ part of 'package:syncflow/view/board_detail_screen.dart';
 
 /// 컬럼 관리 시트를 여는 액션 버튼.
 class _ColumnManageButton extends ConsumerStatefulWidget {
-  const _ColumnManageButton({
-    required this.boardId,
-    required this.columns,
-  });
+  const _ColumnManageButton({required this.boardId, required this.columns});
 
   final int boardId;
   final List<ColumnItem> columns;
 
   @override
-  ConsumerState<_ColumnManageButton> createState() => _ColumnManageButtonState();
+  ConsumerState<_ColumnManageButton> createState() =>
+      _ColumnManageButtonState();
 }
 
 class _ColumnManageButtonState extends ConsumerState<_ColumnManageButton> {
@@ -86,7 +84,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     final session = ref.read(sessionNotifierProvider).value;
     final token = session?.sessionToken;
     if (token == null && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.tr('sessionExpired'))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(context.tr('sessionExpired'))));
     }
     return token;
   }
@@ -130,7 +130,8 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
             child: Text(context.tr('cancel')),
           ),
           FilledButton(
-            onPressed: () => CustomNavigationUtil.back(ctx, result: controller.text.trim()),
+            onPressed: () =>
+                CustomNavigationUtil.back(ctx, result: controller.text.trim()),
             child: Text(context.tr('save')),
           ),
         ],
@@ -148,7 +149,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
       await _reloadColumns();
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -159,11 +162,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     final title = await _showTitleInputDialog(title: context.tr('columnAdd'));
     if (title == null || title.isEmpty) return;
     await _runColumnTask((token) async {
-      await ref.read(boardHandlerProvider).createColumn(
-            token,
-            widget.boardId,
-            title: title,
-          );
+      await ref
+          .read(boardHandlerProvider)
+          .createColumn(token, widget.boardId, title: title);
     });
   }
 
@@ -175,25 +176,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     );
     if (title == null || title.isEmpty) return;
     await _runColumnTask((token) async {
-      await ref.read(boardHandlerProvider).updateColumn(
-            token,
-            widget.boardId,
-            column.id,
-            title: title,
-          );
-    });
-  }
-
-  // ignore: unused_element - isDone 스위치 임시 숨김 시 사용
-  /// 컬럼 완료 상태(is_done)를 토글한다. (현재 UI 미노출)
-  Future<void> _toggleDone(ColumnItem column, bool nextDone) async {
-    await _runColumnTask((token) async {
-      await ref.read(boardHandlerProvider).updateColumn(
-            token,
-            widget.boardId,
-            column.id,
-            isDone: nextDone,
-          );
+      await ref
+          .read(boardHandlerProvider)
+          .updateColumn(token, widget.boardId, column.id, title: title);
     });
   }
 
@@ -205,12 +190,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     final targetPos = direction < 0 ? basePos - 1 : basePos + 1;
     final col = _columns[index];
     await _runColumnTask((token) async {
-      await ref.read(boardHandlerProvider).updateColumn(
-            token,
-            widget.boardId,
-            col.id,
-            position: targetPos,
-          );
+      await ref
+          .read(boardHandlerProvider)
+          .updateColumn(token, widget.boardId, col.id, position: targetPos);
     });
   }
 
@@ -220,7 +202,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(context.tr('columnDelete')),
-        content: Text(context.tr('columnDeleteConfirm', namedArgs: {'name': column.title})),
+        content: Text(
+          context.tr('columnDeleteConfirm', namedArgs: {'name': column.title}),
+        ),
         actions: [
           TextButton(
             onPressed: () => CustomNavigationUtil.back(ctx, result: false),
@@ -237,11 +221,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
     if (ok != true) return;
 
     await _runColumnTask((token) async {
-      await ref.read(boardHandlerProvider).deleteColumn(
-            token,
-            widget.boardId,
-            column.id,
-          );
+      await ref
+          .read(boardHandlerProvider)
+          .deleteColumn(token, widget.boardId, column.id);
     });
   }
 
@@ -289,11 +271,15 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
                 child: ListView.separated(
                   shrinkWrap: true,
                   itemCount: _columns.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final col = _columns[index];
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: p.cardBackground,
                         borderRadius: ConfigUI.cardRadius,
@@ -317,7 +303,9 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
                                 ),
                                 const SizedBox(height: 2),
                                 Text(
-                                  col.isDone ? context.tr('columnDone') : context.tr('columnProgress'),
+                                  col.isDone
+                                      ? context.tr('columnDone')
+                                      : context.tr('columnProgress'),
                                   style: TextStyle(
                                     fontSize: ConfigUI.fontSizeCaption,
                                     color: p.textSecondary,
@@ -327,27 +315,31 @@ class _ColumnManageSheetState extends ConsumerState<_ColumnManageSheet> {
                             ),
                           ),
                           IconButton(
-                            onPressed: (_loading || index == 0) ? null : () => _moveColumn(index, -1),
+                            onPressed: (_loading || index == 0)
+                                ? null
+                                : () => _moveColumn(index, -1),
                             icon: const Icon(Icons.arrow_upward, size: 18),
                             tooltip: context.tr('moveUp'),
                           ),
                           IconButton(
-                            onPressed: (_loading || index == _columns.length - 1) ? null : () => _moveColumn(index, 1),
+                            onPressed:
+                                (_loading || index == _columns.length - 1)
+                                ? null
+                                : () => _moveColumn(index, 1),
                             icon: const Icon(Icons.arrow_downward, size: 18),
                             tooltip: context.tr('moveDown'),
                           ),
                           IconButton(
-                            onPressed: _loading ? null : () => _renameColumn(col),
+                            onPressed: _loading
+                                ? null
+                                : () => _renameColumn(col),
                             icon: const Icon(Icons.edit_outlined, size: 18),
                             tooltip: context.tr('rename'),
                           ),
-                          // TODO: 임시로 isDone 스위치 숨김
-                          // Switch(
-                          //   value: col.isDone,
-                          //   onChanged: _loading ? null : (v) => _toggleDone(col, v),
-                          // ),
                           IconButton(
-                            onPressed: _loading ? null : () => _deleteColumn(col),
+                            onPressed: _loading
+                                ? null
+                                : () => _deleteColumn(col),
                             icon: const Icon(Icons.delete_outline, size: 18),
                             color: p.accent,
                             tooltip: context.tr('delete'),

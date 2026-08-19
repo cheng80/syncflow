@@ -182,7 +182,9 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.symmetric(horizontal: ConfigUI.screenPaddingH),
+          padding: const EdgeInsets.symmetric(
+            horizontal: ConfigUI.screenPaddingH,
+          ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
@@ -204,7 +206,10 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
               ],
               Expanded(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: p.primary.withValues(alpha: 0.15),
                     borderRadius: ConfigUI.cardRadius,
@@ -254,7 +259,7 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
                     bottom: ConfigUI.gapBetweenCards,
                   ),
                   itemCount: _displayCards.length + 1,
-                  onReorder: (oldIndex, newIndex) =>
+                  onReorderItem: (oldIndex, newIndex) =>
                       _onReorder(oldIndex, newIndex),
                   proxyDecorator: (child, index, animation) {
                     final scale = Tween<double>(
@@ -396,14 +401,12 @@ class _ColumnViewState extends ConsumerState<_ColumnView> {
     if (oldIndex >= _displayCards.length) {
       return;
     }
-    if (newIndex > _displayCards.length) {
-      newIndex = _displayCards.length;
+    if (newIndex >= _displayCards.length) {
+      newIndex = _displayCards.length - 1;
     }
     if (oldIndex == newIndex) {
       return;
     }
-    if (newIndex > oldIndex) newIndex--;
-
     final movedCard = _displayCards.removeAt(oldIndex);
     _displayCards.insert(newIndex, movedCard);
     final neighbor = _computeNeighborIds(_displayCards, newIndex);

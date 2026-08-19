@@ -48,8 +48,9 @@ class SessionNotifier extends AsyncNotifier<SessionState> {
     final expires = await SessionSecureStorage.getSessionExpiresAt().timeout(
       _storageTimeout,
       onTimeout: () {
-        if (kDebugMode)
+        if (kDebugMode) {
           debugPrint('[SessionNotifier] getSessionExpiresAt TIMEOUT');
+        }
         return null;
       },
     );
