@@ -133,6 +133,7 @@
   "newCard": "新增卡片",
   "emailRequired": "請輸入信箱地址。",
   "sendCodeFailed": "驗證碼發送失敗。",
+  "retryCodeCountdown": "{seconds}秒後可再次取得驗證碼。",
   "emailAndCodeRequired": "請輸入信箱與驗證碼。",
   "codeMustBe6Digits": "驗證碼必須為6位數字。",
   "verifyFailed": "驗證失敗。",

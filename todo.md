@@ -21,7 +21,7 @@
 - 세분화 알림 기준: 부족 (설정 UI·서버 정책 미도입)
 - **푸시 기본 동작(E2E)**: 멘션·담당자(assignee) 변경 시 **실제 수신 확인 완료** (콘솔 테스트 외 앱 시나리오)
 - 그 외 이벤트(초대 등)·딥링크·알림 on/off는 여전히 제한적
-- **게스트 모드**: **M1 완료** — 환영/게스트 홈(플레이스홀더)·`has_ever_logged_in`·진입 라우팅·게스트 구간 FCM 미초기화. **M2~** 로컬 보드·게이트·Import API 등 미착수 — `docs/syncflow/게스트_모드_구현_플랜.md`
+- **게스트 모드**: **실제 체험 기능 미구현**. M1의 환영 화면·진입 라우팅·게스트 플래그·FCM 미초기화만 완료했으며, 2026-08-20 iOS 실기기 Profile에서 확인한 `GuestHomeScreen`은 이메일 로그인만 제공하는 플레이스홀더다. M2부터 로컬 보드 CRUD를 구현한다 — `docs/syncflow/게스트_모드_구현_플랜.md`
 
 ---
 
@@ -59,13 +59,15 @@
 ## 게스트 모드 & Import API (별도 세부 플랜)
 
 > **세부 체크리스트**: `docs/syncflow/게스트_모드_구현_플랜.md`  
-> **정책 요약**: 게스트 로컬 보드 개수 제한 없음 · 신규 진입 게스트/로그인 이원 · `has_ever_logged_in` 시 로그인 우선 · 로그아웃은 로그인 화면만(A) · 로컬→서버는 `POST /v1/boards/import`(트랜잭션·idempotency).
+> **정책 요약**: 기존 `GetStorage`와 보드 UI 재사용 · 게스트 구간 HTTP/WS/FCM 미호출 · 로컬 보드 개수 제한 없음 · 최초 샘플 보드 제공 · 협업 기능만 로그인 게이트 · 로컬→서버는 `POST /v1/boards/import`(트랜잭션·idempotency).
+>
+> **현재 사용자 관점**: `게스트로 시작` 버튼과 진입 상태만 존재하며 보드 체험은 아직 불가능하다. M2 완료 전에는 실제 게스트 모드로 간주하지 않는다.
 
 ### 마일스톤 (여기서만 완료 여부 관리)
 
-- [x] **M1** Flutter: 진입 라우팅 / `has_ever_logged_in` / 게스트·환영 화면 / 게스트 시 FCM 미초기화 (명시적 `AppMode` enum은 미도입, 회귀 QA 권장)
-- [ ] **M2** Flutter: 로컬 보드 저장소 + 게스트 목록·상세(WS·REST 분리)
-- [ ] **M3** Flutter: 계정 필요 다이얼로그 + `pending_intent` + 초대·참가·서버 보드 생성 등 게이트
+- [x] **M1** Flutter: 진입 라우팅 / `has_ever_logged_in` / 게스트·환영 화면 / 게스트 시 FCM 미초기화 (**플레이스홀더 단계**, 실제 보드 체험 아님)
+- [ ] **M2** Flutter: GetStorage 로컬 보드 저장소 + 기존 목록·상세 UI 연결 + 전체 로컬 CRUD + 게스트용 Drawer + 앱 재실행 보존
+- [ ] **M3** Flutter: 계정 필요 다이얼로그 + 보드 참가용 `pending_intent` + 초대·참가·담당자·멘션·Presence 게이트
 - [ ] **M4** FastAPI: `POST /v1/boards/import` 트랜잭션 + `client_board_uuid` idempotent
 - [ ] **M5** Flutter: 로그인 직후 import·검증 후 로컬 정리·온라인 전환
 - [ ] **M6** i18n · QA · 앱 심사 Review Notes 반영

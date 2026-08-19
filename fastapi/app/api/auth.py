@@ -4,12 +4,13 @@ SyncFlow 인증 API
 """
 
 import hashlib
+import hmac
 import secrets
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 from app.database.connection import connect_db
 from app.utils.auth_deps import get_current_user_id
@@ -25,6 +26,7 @@ async def get_me(user_id: int = Depends(get_current_user_id)):
 
 
 CODE_EXPIRES_MINUTES = 10
+RESEND_COOLDOWN_SECONDS = 60
 MAX_ATTEMPTS = 5
 SESSION_EXPIRES_DAYS = 14
 
@@ -40,11 +42,11 @@ def _hash_code(code: str) -> str:
 
 
 class SendCodeRequest(BaseModel):
-    email: str
+    email: EmailStr
 
 
 class VerifyRequest(BaseModel):
-    email: str
+    email: EmailStr
     code: str
 
 
@@ -55,15 +57,41 @@ async def send_code(req: SendCodeRequest):
     - email_verifications에 code_hash 저장
     - 이메일 발송
     """
-    email = req.email.lower().strip()
+    email = str(req.email).lower().strip()
     code = _generate_code()
     code_hash = _hash_code(code)
-    expires_at = datetime.utcnow() + timedelta(minutes=CODE_EXPIRES_MINUTES)
+    expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(minutes=CODE_EXPIRES_MINUTES)
 
     conn = connect_db()
     try:
         with conn.cursor() as cursor:
-            # 새 인증 코드 저장 (동일 이메일 여러 건 허용, 검증 시 최신 사용)
+            cursor.execute(
+                f"""
+                SELECT id,
+                       LEAST(
+                           {RESEND_COOLDOWN_SECONDS},
+                           GREATEST(
+                               0,
+                               {RESEND_COOLDOWN_SECONDS} - TIMESTAMPDIFF(SECOND, created_at, UTC_TIMESTAMP())
+                           )
+                       ) AS retry_after
+                FROM email_verifications
+                WHERE email = %s
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
+                """,
+                (email,)
+            )
+            latest = cursor.fetchone()
+            retry_after = int(latest[1]) if latest else 0
+            if retry_after > 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"인증 코드는 {retry_after}초 후 다시 요청할 수 있습니다.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+
             cursor.execute(
                 """
                 INSERT INTO email_verifications (email, code_hash, expires_at, attempt_count)
@@ -71,11 +99,23 @@ async def send_code(req: SendCodeRequest):
                 """,
                 (email, code_hash, expires_at)
             )
+            verification_id = cursor.lastrowid
+            cursor.execute(
+                "DELETE FROM email_verifications WHERE email = %s AND id <> %s",
+                (email, verification_id),
+            )
             conn.commit()
 
-        if EmailService.send_login_code(email, code, CODE_EXPIRES_MINUTES):
-            return {"ok": True, "message": "인증 코드가 발송되었습니다."}
-        raise HTTPException(status_code=500, detail="이메일 발송 실패")
+        if not EmailService.send_login_code(email, code, CODE_EXPIRES_MINUTES):
+            with conn.cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM email_verifications WHERE id = %s",
+                    (verification_id,),
+                )
+                conn.commit()
+            raise HTTPException(status_code=500, detail="이메일 발송 실패")
+
+        return {"ok": True, "message": "인증 코드가 발송되었습니다."}
     finally:
         conn.close()
 
@@ -85,7 +125,7 @@ async def verify(req: VerifyRequest):
     """
     인증 코드 검증 → users 생성/조회 → sessions 생성 → session_token 반환
     """
-    email = req.email.lower().strip()
+    email = str(req.email).lower().strip()
     code = req.code.strip()
 
     if len(code) != 6 or not code.isdigit():
@@ -95,21 +135,37 @@ async def verify(req: VerifyRequest):
     conn = connect_db()
     try:
         with conn.cursor() as cursor:
-            # email_verifications 검증
             cursor.execute(
                 """
-                SELECT id, attempt_count FROM email_verifications
-                WHERE email = %s AND code_hash = %s AND expires_at > UTC_TIMESTAMP()
+                SELECT id, code_hash, attempt_count FROM email_verifications
+                WHERE email = %s AND expires_at > UTC_TIMESTAMP()
+                ORDER BY created_at DESC, id DESC
+                LIMIT 1
+                FOR UPDATE
                 """,
-                (email, code_hash)
+                (email,)
             )
             row = cursor.fetchone()
             if not row:
                 raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않거나 만료되었습니다.")
 
-            ev_id, attempt_count = row
+            ev_id, stored_code_hash, attempt_count = row
             if attempt_count >= MAX_ATTEMPTS:
                 raise HTTPException(status_code=400, detail="시도 횟수 초과. 새 코드를 요청하세요.")
+
+            if not hmac.compare_digest(code_hash, stored_code_hash):
+                cursor.execute(
+                    """
+                    UPDATE email_verifications
+                    SET attempt_count = attempt_count + 1
+                    WHERE id = %s
+                    """,
+                    (ev_id,),
+                )
+                conn.commit()
+                if attempt_count + 1 >= MAX_ATTEMPTS:
+                    raise HTTPException(status_code=400, detail="시도 횟수 초과. 새 코드를 요청하세요.")
+                raise HTTPException(status_code=400, detail="인증 코드가 올바르지 않거나 만료되었습니다.")
 
             # users에 없으면 생성
             cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
@@ -125,7 +181,7 @@ async def verify(req: VerifyRequest):
 
             # 세션 생성 (UUID4, 14일)
             session_token = str(uuid.uuid4())
-            expires_at = datetime.utcnow() + timedelta(days=SESSION_EXPIRES_DAYS)
+            expires_at = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(days=SESSION_EXPIRES_DAYS)
 
             cursor.execute(
                 """
@@ -134,9 +190,7 @@ async def verify(req: VerifyRequest):
                 """,
                 (user_id, session_token, expires_at)
             )
-            conn.commit()
-
-            # 사용한 인증 코드 무효화 (attempt_count로 표시하거나 삭제)
+            # 사용한 인증 코드 무효화
             cursor.execute("DELETE FROM email_verifications WHERE id = %s", (ev_id,))
             conn.commit()
 

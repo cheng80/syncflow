@@ -26,7 +26,10 @@ class ApiClient {
     );
     if (res.statusCode != 200) {
       final body = CustomJsonUtil.toMap(res.body);
-      throw ApiException(body?['detail'] ?? '인증 코드 발송 실패');
+      throw ApiException(
+        body?['detail'] ?? '인증 코드 발송 실패',
+        retryAfter: int.tryParse(res.headers['retry-after'] ?? ''),
+      );
     }
     return SendCodeResponse.fromJson(
       CustomJsonUtil.decode(res.body) as Map<String, dynamic>,
@@ -431,8 +434,19 @@ class ApiClient {
 }
 
 class ApiException implements Exception {
-  ApiException(this.message);
+  ApiException(Object? detail, {this.retryAfter}) : message = _message(detail);
+
+  static String _message(Object? detail) {
+    if (detail is String) return detail;
+    if (detail is List && detail.isNotEmpty) {
+      final first = detail.first;
+      if (first is Map && first['msg'] is String) return first['msg'] as String;
+    }
+    return '요청 처리에 실패했습니다.';
+  }
+
   final String message;
+  final int? retryAfter;
   @override
   String toString() => message;
 }

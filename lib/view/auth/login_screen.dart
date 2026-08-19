@@ -8,6 +8,8 @@
 //    ├─ _verifyCode(코드 검증/로그인)
 //    └─ _goBack(단계 되돌리기)
 
+import 'dart:async';
+
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -41,13 +43,43 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   String? _email; // 코드 발송 후 저장
   bool _loading = false;
   String? _error;
+  Timer? _retryTimer;
+  DateTime? _retryUntil;
+  int _retrySeconds = 0;
 
   /// 입력 컨트롤러 리소스를 해제한다.
   @override
   void dispose() {
+    _retryTimer?.cancel();
     _emailController.dispose();
     _codeController.dispose();
     super.dispose();
+  }
+
+  void _startRetryCountdown(int seconds) {
+    _retryTimer?.cancel();
+    _retryUntil = DateTime.now().add(Duration(seconds: seconds));
+    setState(() {
+      _loading = false;
+      _error = null;
+      _retrySeconds = seconds;
+    });
+    _retryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      final milliseconds = _retryUntil!.difference(DateTime.now()).inMilliseconds;
+      final remaining = milliseconds <= 0 ? 0 : (milliseconds + 999) ~/ 1000;
+      if (remaining != _retrySeconds) {
+        setState(() => _retrySeconds = remaining);
+      }
+      if (remaining == 0) {
+        timer.cancel();
+        _retryTimer = null;
+        _retryUntil = null;
+      }
+    });
   }
 
   /// 이메일 인증 코드를 요청하고 입력 단계로 이동한다.
@@ -65,6 +97,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       await ApiClient().sendAuthCode(email);
+      if (!mounted) return;
       setState(() {
         _email = email;
         _loading = false;
@@ -72,6 +105,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         _codeController.clear();
       });
     } on ApiException catch (e) {
+      if (!mounted) return;
+      if ((e.retryAfter ?? 0) > 0) {
+        _startRetryCountdown(e.retryAfter!);
+        return;
+      }
       setState(() {
         _loading = false;
         _error = e.message;
@@ -81,6 +119,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         debugPrint('sendAuthCode failed: $e');
         debugPrint('baseUrl=${getApiBaseUrl()}');
       }
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = kDebugMode ? '${context.tr('sendCodeFailed')}\n$e' : context.tr('sendCodeFailed');
@@ -110,20 +149,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     try {
       final res = await ApiClient().verifyAuthCode(email, code);
-      await ref.read(sessionNotifierProvider.notifier).loginSuccess(
-            res.sessionToken,
-            res.expiresAt,
-            res.userId,
-          );
-      ref.read(guestBrowsingProvider.notifier).state = false;
-      ref.read(showLoginFromWelcomeProvider.notifier).state = false;
+      await ref
+          .read(sessionNotifierProvider.notifier)
+          .loginSuccess(res.sessionToken, res.expiresAt, res.userId);
       // 세션 저장 후 루트가 MainScaffold로 전환됨
     } on ApiException catch (e) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = e.message;
       });
     } catch (_) {
+      if (!mounted) return;
       setState(() {
         _loading = false;
         _error = context.tr('verifyFailed');
@@ -269,7 +306,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     const SizedBox(height: 16),
                     FilledButton(
-                      onPressed: _loading ? null : _sendCode,
+                      onPressed: _loading || _retrySeconds > 0 ? null : _sendCode,
                       child: _loading
                           ? const SizedBox(
                               width: 20,
@@ -277,6 +314,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : Text(context.tr('getCode')),
+                    ),
+                  ],
+                  if (_retrySeconds > 0) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      context.tr(
+                        'retryCodeCountdown',
+                        namedArgs: {'seconds': '$_retrySeconds'},
+                      ),
+                      style: TextStyle(color: p.textSecondary, fontSize: ConfigUI.fontSizeLabel),
+                      textAlign: TextAlign.center,
                     ),
                   ],
                   if (_error != null) ...[

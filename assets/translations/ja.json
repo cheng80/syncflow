@@ -133,6 +133,7 @@
   "newCard": "新規カード",
   "emailRequired": "メールアドレスを入力してください。",
   "sendCodeFailed": "認証コードの送信に失敗しました。",
+  "retryCodeCountdown": "{seconds}秒後にもう一度お試しください。",
   "emailAndCodeRequired": "メールアドレスと認証コードを入力してください。",
   "codeMustBe6Digits": "認証コードは6桁の数字です。",
   "verifyFailed": "認証に失敗しました。",

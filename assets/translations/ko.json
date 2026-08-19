@@ -133,6 +133,7 @@
   "newCard": "새 카드",
   "emailRequired": "이메일을 입력하세요.",
   "sendCodeFailed": "인증 코드 발송에 실패했습니다.",
+  "retryCodeCountdown": "{seconds}초 후 다시 요청할 수 있습니다.",
   "emailAndCodeRequired": "이메일과 인증 코드를 입력하세요.",
   "codeMustBe6Digits": "인증 코드는 6자리 숫자입니다.",
   "verifyFailed": "인증에 실패했습니다.",
